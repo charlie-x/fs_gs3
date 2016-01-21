@@ -68,7 +68,7 @@ BOOL Cfs_gs3App::InitInstance()
 	// Change the registry key under which our settings are stored
 	// TODO: You should modify this string to be something appropriate
 	// such as the name of your company or organization
-	SetRegistryKey(_T("Local AppWizard-Generated Applications"));
+	SetRegistryKey(_T("charliex"));
 
 	Cfs_gs3Dlg dlg;
 	m_pMainWnd = &dlg;
