@@ -1,7 +1,7 @@
 TODO: Work in progress.
 
 Modbus part not written/tested yet. 
-Just pulling in data from FLashCut GUI.
+Just pulling in data from FlashCut GUI.
 
 Needs libmodbus modbus.dll, my windows x64 version is here.
 	https://github.com/charlie-x/libmodbus
