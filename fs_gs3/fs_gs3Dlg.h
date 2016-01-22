@@ -13,11 +13,16 @@
 #define FC_Z_PLUS		( WM_USER + 261 )
 #define FC_Z_MINUS		( WM_USER + 262 )
 
+#define MODBUS_CMD(maj,minor) ((maj<<8)+minor)
+
 class VFD
 {
+        // commands for GS3 DuraPulse VFD
         enum {
-            hz_addr = 2331
-        };
+            hz_addr         = MODBUS_CMD ( 9, 26 ),
+            run_stop_addr   = MODBUS_CMD ( 9, 27 )
+        } modbuscmds;
+
     public:
 
         VFD() : ratio ( 1.44 )
@@ -28,6 +33,7 @@ class VFD
         {
             ctx = pctx;
         }
+
         // display shows motor rpm, but we have to send VFD RPM
         void set_ratio ( double new_ratio )
         {
@@ -38,13 +44,22 @@ class VFD
         {
             return false;
         }
+
         bool turn_off_motor ( void )
         {
+            if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == 0 ) {
+                return true;
+            }
+
             return false;
         }
 
         bool turn_on_motor ( void )
         {
+            if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == 1 ) {
+                return true;
+            }
+
             return false;
         }
 
@@ -52,9 +67,13 @@ class VFD
         {
             double  converted_rpm;
 
+            // convert spindle to motor RPM
             converted_rpm = ( double ) rpm / ratio;
 
             // convert rpm to hZ
+
+            // for now testing
+            converted_rpm = 20;
 
             // hZ value is in decimal * 10, 60.0hZ is 600 decimal
             uint16_t hZ = ( uint16_t ) ( converted_rpm * 10.0f );
@@ -69,7 +88,7 @@ class VFD
 
             // 01 10 09 1b 00 02 04 02 58 00 01 5a 66
 
-            // send to VFD
+            // send to VFD as one command.
             uint16_t data[2];
 
             data[0] = ( hZ >> 8 );
@@ -78,8 +97,8 @@ class VFD
             data[2] = 0;
             data[3] = 0; // motor on/off
 
-            if ( modbus_write_registers ( ctx, hz_addr, 2, &data[0] ) == 1 ) {
-                return false;
+            if ( modbus_write_register ( ctx, hz_addr, hZ ) == 1 ) {
+                return true;
             }
 
             return false;
