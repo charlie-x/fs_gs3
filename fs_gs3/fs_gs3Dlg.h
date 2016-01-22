@@ -59,6 +59,7 @@ enum {
 // Helper macro
 #define MODBUS_CMD(maj,minor) ((uint16_t)(maj<<8)+minor)
 
+
 class VFD
 {
         // commands for GS3 DuraPulse VFD
@@ -309,4 +310,5 @@ class Cfs_gs3Dlg : public CDialogEx
         CEdit m_COMPort;
         afx_msg void OnBnClickedConnect();
         afx_msg void OnEnChangeComPort();
+        afx_msg void OnBnClickedSerconfig();
 };

@@ -11,8 +11,12 @@
 #define new DEBUG_NEW
 #endif
 
-static const CString strSection = _T ( "FCGS3" );
-static const CString strCOMPort = _T ( "COMPORT" );
+const CString strSection	= _T ( "FCGS3" );
+const CString strCOMPort	= _T ( "COMPORT" );
+const CString strBAUDRate	= _T ( "BAUD" );
+const CString strStopBits	= _T ( "STOP" );
+const CString strParity		= _T ( "PARITY" );
+const CString strBits		= _T ( "BITS" );
 
 // CAboutDlg dialog used for App About
 
@@ -79,6 +83,7 @@ BEGIN_MESSAGE_MAP ( Cfs_gs3Dlg, CDialogEx )
     ON_WM_QUERYDRAGICON()
     ON_BN_CLICKED ( IDC_CONNECT, &Cfs_gs3Dlg::OnBnClickedConnect )
     ON_EN_CHANGE ( IDC_COM_PORT, &Cfs_gs3Dlg::OnEnChangeComPort )
+    ON_BN_CLICKED ( IDC_SERCONFIG, &Cfs_gs3Dlg::OnBnClickedSerconfig )
 END_MESSAGE_MAP()
 
 
@@ -487,8 +492,16 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
         return;
     }
 
-    //GSx drives seem to default to ASCII,7 vs RTU,8.
-    ctx = modbus_new_rtu ( CT2A ( ( LPCTSTR ) comPort ), 115200, 'N', 8, 1 );
+    // GSx drives seem to default to ASCII,7 vs RTU,8.
+
+
+    // pull in default values from registry, or use defaults
+    uint32_t  baud = pApp->GetProfileInt ( strSection, strBAUDRate , 115200 );
+    uint8_t bits = pApp->GetProfileInt ( strSection, strBits, 8 );
+    double stopbits = pApp->GetProfileInt ( strSection, strStopBits, 1 ) / 10.0;
+    uint8_t parity = pApp->GetProfileInt ( strSection, strStopBits, 'N' );
+
+    ctx = modbus_new_rtu ( CT2A ( ( LPCTSTR ) comPort ), baud, parity, bits, stopbits );
 
     if ( modbus_connect ( ctx ) == -1 ) {
 
@@ -542,4 +555,21 @@ void Cfs_gs3Dlg::OnEnChangeComPort()
 
         pApp->WriteProfileString ( strSection, strCOMPort, comPort );
     }
+}
+
+
+void Cfs_gs3Dlg::OnBnClickedSerconfig()
+{
+    CWinApp* pApp = AfxGetApp();
+    ASSERT ( pApp );
+
+    if ( pApp == NULL ) {
+        return;
+    }
+
+    SerialSetup dlg ;
+
+    dlg.DoModal();
+
+
 }
