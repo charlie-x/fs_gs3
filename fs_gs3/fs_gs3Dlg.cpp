@@ -122,7 +122,6 @@ BOOL Cfs_gs3Dlg::OnInitDialog()
 
     // TODO: Add extra init here
 
-
     // Default
     CString  comPort ;
 
@@ -189,14 +188,21 @@ BOOL CALLBACK EnumWindowsProc ( HWND hwnd, LPARAM lParam )
 
     int text_length = GetWindowTextA ( hwnd, buffer, sizeof ( buffer ) / sizeof ( buffer[0] ) - 1 );
 
+    // using the " - " differentiates from popup child windows. (check parent is desktop?)
     if ( text_length && strstr ( buffer, "FlashCut CNC - " ) != NULL ) {
         * ( HWND* ) lParam = hwnd;
         return FALSE;
     }
 
+    * ( HWND* ) lParam = NULL;
     return TRUE;
 }
 
+/**
+ * Find FlashCut window
+ *
+ * Returns: hWnd of GUI
+ */
 HWND GetFlashCutHWND ( void )
 {
     HWND hWnd = NULL;
@@ -215,23 +221,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
 
     switch ( direction ) 	{
 
-        case 0:
-            // Z+
-            // start moving
-            ::SendMessage ( hwnd, FC_Z_PLUS, 0, 0 );
-            // stop moving
-            ::SendMessage ( hwnd, FC_Z_PLUS, 1, 0 );
-            break;
-
-        case 1:
-            // Z-
-            // start moving
-            ::SendMessage ( hwnd, FC_Z_MINUS, 0, 0 );
-            // stop moving
-            ::SendMessage ( hwnd, FC_Z_MINUS, 1, 0 );
-            break;
-
-        case 2:
+        case JOG_X_PLUS:
             // X+
             // start moving
             ::SendMessage ( hwnd, FC_X_PLUS, 0, 0 );
@@ -239,7 +229,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
             ::SendMessage ( hwnd, FC_X_PLUS, 1, 0 );
             break;
 
-        case 3:
+        case JOG_X_MINUS:
             // X-
             // start moving
             ::SendMessage ( hwnd, FC_X_MINUS, 0, 0 );
@@ -247,7 +237,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
             ::SendMessage ( hwnd, FC_X_MINUS, 1, 0 );
             break;
 
-        case 4:
+        case JOG_Y_PLUS:
             // Y+
             // start moving
             ::SendMessage ( hwnd, FC_Y_PLUS, 0, 0 );
@@ -255,12 +245,28 @@ void Cfs_gs3Dlg::Jog ( int direction )
             ::SendMessage ( hwnd, FC_Y_PLUS, 1, 0 );
             break;
 
-        case 5:
+        case JOG_Y_MINUS:
             // Y-
             // start moving
             ::SendMessage ( hwnd, FC_Y_MINUS, 0, 0 );
             // stop moving
             ::SendMessage ( hwnd, FC_Y_MINUS, 1, 0 );
+            break;
+
+        case JOG_Z_PLUS:
+            // Z+
+            // start moving
+            ::SendMessage ( hwnd, FC_Z_PLUS, 0, 0 );
+            // stop moving
+            ::SendMessage ( hwnd, FC_Z_PLUS, 1, 0 );
+            break;
+
+        case JOG_Z_MINUS:
+            // Z-
+            // start moving
+            ::SendMessage ( hwnd, FC_Z_MINUS, 0, 0 );
+            // stop moving
+            ::SendMessage ( hwnd, FC_Z_MINUS, 1, 0 );
             break;
     }
 }
@@ -268,6 +274,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
 void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
 {
     TCHAR szBuf[2048];
+
     LRESULT lResult;
     HWND spindle_speed = NULL;
 
@@ -357,6 +364,7 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
     // update the button state
     m_SpindleState.SetCheck ( m_Spindle );
 
+    // show status
     if ( m_Spindle ) {
         m_SpindleState.SetWindowText ( _T ( "Spindle (On)" ) );
 
@@ -370,11 +378,20 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
 
     // send to VFD
 
+    // adds about 300ms of latency when not connected to VFD for each call, timeout on libmodbus?
+
     // send new RPM to GSx, comms are slow to VFD so only update when you need too
     static int rpm = -1;
 
     if ( rpm != m_RPMValue ) {
-        vfd->update_rpm ( m_RPMValue );
+
+        if ( vfd->update_rpm ( m_RPMValue ) == false ) {
+
+            m_Status.SetWindowText ( _T ( "Unable to setup RPM in VFD" ) );
+
+            // wasn't able to pass to VFD, drop out early
+            return;
+        }
     }
 
     // check if motor is running
@@ -391,18 +408,18 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
             vfd->turn_off_motor();
         }
 
-        //otherwise leave it alone, already running.
+        // otherwise leave it alone, already running.
 
     } else
         if ( motor_status == 0 ) {
 
-            //motor is not running, then check if spindle control is on, if it is switch on the motor
+            // motor is not running, then check if spindle control is on, if it is switch on the motor
             if ( m_SpindleState.GetCheck() == TRUE ) {
                 // turn on motor
                 vfd->turn_on_motor();
             }
 
-            //otherwise leave it alone, already stopped
+            // otherwise leave it alone, already stopped
 
         } else {
             m_Status.SetWindowText ( _T ( "Error in reading VFD state" ) );
@@ -444,11 +461,10 @@ HCURSOR Cfs_gs3Dlg::OnQueryDragIcon()
 
 void Cfs_gs3Dlg::OnBnClickedConnect()
 {
-    //quick out
+    // quick out
     if ( ctx ) {
 
-        //already opened?
-
+        // already opened?
         m_Status.SetWindowText ( _T ( "Already opened!" ) );
 
         return;
@@ -498,11 +514,13 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
         return;
     }
 
+    // we need to query the VFD and make sure its a valid connection here
+
     // all good so far
     m_Status.SetWindowText ( _T ( "Port opened" ) );
 
     //kick off timer
-    SetTimer ( 1, 20, NULL );
+    SetTimer ( 1, 10, NULL );
 }
 
 
@@ -517,7 +535,6 @@ void Cfs_gs3Dlg::OnEnChangeComPort()
 
     // save to registry
     CString  comPort;
-
 
     m_COMPort.GetWindowText ( comPort );
 

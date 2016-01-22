@@ -4,7 +4,6 @@
 #pragma once
 #include "afxwin.h"
 
-
 /// keeping these in here til they're figured out before moving to own class/headers
 
 // FlashCut GUI messages, these do a 0/1 command for start/stop movement which explains
@@ -16,12 +15,25 @@
 #define FC_Z_PLUS		( WM_USER + 261 )
 #define FC_Z_MINUS		( WM_USER + 262 )
 
+enum {
+    JOG_ALL_STOP,
+
+    JOG_X_PLUS,
+    JOG_X_MINUS,
+
+    JOG_Y_PLUS,
+    JOG_Y_MINUS,
+
+    JOG_Z_PLUS,
+    JOG_Z_MINUS
+};
+
 /*
- Modbus is strange (to me anyway) that the decimal is in a range, may map to a memory address
- so you have to know which range the register is in, then add the register value to that range.
- For the status monitors, seems to be 40000 + they're indexed at 1, versus 0, so it is +1,
- therefore Status Monitor 1 is 0x2100, which to get the decimal address is 40000+0x2100+1 = 48449
- Octal and Hex are just the address.
+	Modbus is strange (to me anyway) that the decimal is in a range, may map to a memory address
+	so you have to know which range the register is in, then add the register value to that range.
+	For the status monitors, seems to be 40000 + they're indexed at 1, versus 0, so it is +1,
+	therefore Status Monitor 1 is 0x2100, which to get the decimal address is 40000+0x2100+1 = 48449
+	Octal and Hex are just the address.
 
 	Durapulse GS3 status registers form CH5 of manual
 
@@ -51,8 +63,8 @@ class VFD
 {
         // commands for GS3 DuraPulse VFD
         enum {
-            hz_addr = MODBUS_CMD ( 9, 26 ),
-            run_stop_addr = MODBUS_CMD ( 9, 27 ),
+            hz_addr			= MODBUS_CMD ( 9, 26 ),
+            run_stop_addr	= MODBUS_CMD ( 9, 27 ),
 
             // status monitors
             status_monitor_2_addr = 48450
@@ -116,7 +128,9 @@ class VFD
 
             ASSERT ( ctx );
 
-            if ( ctx == NULL ) { return false; }
+            if ( ctx == NULL ) {
+                return false;
+            }
 
             if ( modbus_read_registers ( ctx, status_monitor_2_addr, 1, ( uint16_t* ) &status_monitor_2 ) == -1 ) {
 
@@ -149,7 +163,9 @@ class VFD
         {
             ASSERT ( ctx );
 
-            if ( ctx == NULL ) { return false; }
+            if ( ctx == NULL ) {
+                return false;
+            }
 
             if ( modbus_write_register ( ctx, run_stop_addr, 0 ) == -1 ) {
                 _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
@@ -164,7 +180,9 @@ class VFD
         {
             ASSERT ( ctx );
 
-            if ( ctx == NULL ) { return false; }
+            if ( ctx == NULL ) {
+                return false;
+            }
 
             if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == -1 ) {
 
@@ -215,7 +233,9 @@ class VFD
 
             ASSERT ( ctx );
 
-            if ( ctx == NULL ) { return false; }
+            if ( ctx == NULL ) {
+                return false;
+            }
 
             if ( modbus_write_register ( ctx, hz_addr, hZ ) == -1 ) {
 
@@ -236,7 +256,6 @@ class VFD
         double ratio;
 };
 
-
 // Cfs_gs3Dlg dialog
 class Cfs_gs3Dlg : public CDialogEx
 {
@@ -246,14 +265,17 @@ class Cfs_gs3Dlg : public CDialogEx
         ~Cfs_gs3Dlg()
         {
             if ( ctx ) {
+
                 modbus_close ( ctx );
                 modbus_free ( ctx );
+
                 ctx = NULL;
             }
 
             delete vfd;
             vfd = NULL;
         }
+
         void Jog ( int direction );
 
 // Dialog Data
