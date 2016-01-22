@@ -12,38 +12,6 @@
 #endif
 
 
-class VFD
-{
-    public:
-
-        VFD() {
-            ratio = 1.44;
-        }
-        // display shows motor rpm, but we have to send VFD RPM
-        void set_ratio ( double new_ratio ) {
-            ratio = new_ratio;
-        }
-
-        bool motor_running ( void ) {
-            return false;
-        }
-        bool turn_off_motor ( void ) {
-            return false;
-        }
-        bool turn_on_motor ( void ) {
-            return false;
-        }
-        bool update_rpm ( unsigned int rpm ) {
-            double converted_rpm;
-            converted_rpm = ( double ) rpm / ratio;
-            return false;
-        }
-
-    private:
-        double ratio;
-};
-
-VFD *vfd;
 
 // CAboutDlg dialog used for App About
 
