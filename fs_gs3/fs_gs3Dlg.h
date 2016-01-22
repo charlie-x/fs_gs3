@@ -4,8 +4,11 @@
 #pragma once
 #include "afxwin.h"
 
-// FlashCut GUI messages, these do a 0/1 state for start movement which explains
-// some of the jerkiness and unpredictable behaviour of the GUI jog
+
+/// keeping these in here til they're figured out before moving to own class/headers
+
+// FlashCut GUI messages, these do a 0/1 command for start/stop movement which explains
+// some of the jerkiness and unpredictable behaviour of the GUI continous jog
 #define FC_X_PLUS		( WM_USER + 257 )
 #define FC_X_MINUS		( WM_USER + 258 )
 #define FC_Y_PLUS		( WM_USER + 259 )
@@ -13,14 +16,47 @@
 #define FC_Z_PLUS		( WM_USER + 261 )
 #define FC_Z_MINUS		( WM_USER + 262 )
 
-#define MODBUS_CMD(maj,minor) ((maj<<8)+minor)
+/*
+ Modbus is strange (to me anyway) that the decimal is in a range, may map to a memory address
+ so you have to know which range the register is in, then add the register value to that range.
+ For the status monitors, seems to be 40000 + they're indexed at 1, versus 0, so it is +1,
+ therefore Status Monitor 1 is 0x2100, which to get the decimal address is 40000+0x2100+1 = 48449
+ Octal and Hex are just the address.
+
+	Durapulse GS3 status registers form CH5 of manual
+
+	Name						Hex	 Dec   Oct   Mode
+	--------------------------- ---- ----- ----- ----
+	Status Monitor 1			2100 48449 20400 RO
+	Status Monitor 2			2101 48450 20401 RO
+	Frequency Command F			2102 48451 20402 RO
+	Output Frequency H			2103 48452 20403 RO
+	Output Current A			2104 48453 20404 RO
+	DC Bus Voltage d			2105 48454 20405 RO
+	Output Voltage U			2106 48455 20406 RO
+	Motor RPM					2107 48456 20407 RO
+	Scale Frequency(Low Word)	2108 48457 20410 RO
+	Scale Frequency(High Word)	2109 48458 20411 RO
+	Power Factor Angle			210A 48459 20412 RO
+	% Load						210B 48460 20413 RO
+	PID Setpoint				210C 48461 20414 RO
+	PID Feedback Signal(PV)		210D 48462 20415 RO
+	Firmware Version			2110 48465 20420 RO
+*/
+
+// Helper macro
+#define MODBUS_CMD(maj,minor) ((uint16_t)(maj<<8)+minor)
 
 class VFD
 {
         // commands for GS3 DuraPulse VFD
         enum {
-            hz_addr         = MODBUS_CMD ( 9, 26 ),
-            run_stop_addr   = MODBUS_CMD ( 9, 27 )
+            hz_addr = MODBUS_CMD ( 9, 26 ),
+            run_stop_addr = MODBUS_CMD ( 9, 27 ),
+
+            // status monitors
+            status_monitor_2_addr = 48450
+
         } modbuscmds;
 
     public:
@@ -29,7 +65,7 @@ class VFD
         {
         }
 
-        void     set_ctx ( modbus_t *pctx )
+        void  set_ctx ( modbus_t *pctx )
         {
             ctx = pctx;
         }
@@ -40,27 +76,103 @@ class VFD
             ratio = new_ratio;
         }
 
-        bool motor_running ( void )
+        /*
+        Status Monitor 2 - Memory Address h2101
+        	Address	Bit(s) Val	AC Drive Status
+        	Bit(s)	Binary(Dec)
+        	-------	------		---------------
+        	0 and 1	00 (0)		Drive operation stopped(STOP)
+        			01 (1)		Run to Stop transition
+        			10 (2)		Standby
+        			11 (3)		Drive operation running(RUN)
+        	2		1 (4)		JOG active
+        	3 and 4	00 (0)		Rotational direction forward(FWD)
+        			01 (8)		REV to FWD transition
+        			10 (16)		FWD to REV transition
+        			11 (24)		Rotational direction reverse(REV)
+        	5 ~7	N/A			Reserved
+        	8		1 (32)		Source of frequency determined by serial comm interface (P4.00 = 5)
+        	9		1 (64)		Source of frequency determined by AI terminal(P4.00 = 2, 3, 4 or 6)
+        	10		1 (128)		Source of operation determined by serial comm interface (P3.00 = 3 or 4)
+        	11		1 (256)		Parameters have been locked (P9.07 = 1)
+        	12		N/A			Copy command eable(sp?)
+        */
+        typedef struct  statusMonitor2_tag {
+            uint16_t	drive_state : 2;
+            uint16_t	jog_active : 1;
+            uint16_t	direction : 2;
+            uint16_t	reserved_1 : 3;
+            uint16_t	freq_src_1 : 1;
+            uint16_t	freq_src_2 : 1;
+            uint16_t	freq_src_3 : 1;
+            uint16_t	params_locked : 1;
+            uint16_t	reserved_2 : 1;
+        } statusMonitor2;
+
+        statusMonitor2 status_monitor_2;
+
+        bool read_status_2 ( void )
         {
-            return false;
+
+            ASSERT ( ctx );
+
+            if ( ctx == NULL ) { return false; }
+
+            if ( modbus_read_registers ( ctx, status_monitor_2_addr, 1, ( uint16_t* ) &status_monitor_2 ) == -1 ) {
+
+                _RPT1 ( _CRT_WARN, "modbus_read_registers failed: %s\n", modbus_strerror ( errno ) );
+                return false;
+            }
+
+            return true;
+        }
+
+        int motor_running ( void )
+        {
+
+            if ( read_status_2()  == true ) {
+                if ( status_monitor_2.drive_state == 0 ) {
+                    // not running
+                    return 0;
+                }
+
+                // running
+                return 1;
+            }
+
+
+            // error
+            return -1;
         }
 
         bool turn_off_motor ( void )
         {
-            if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == 0 ) {
-                return true;
+            ASSERT ( ctx );
+
+            if ( ctx == NULL ) { return false; }
+
+            if ( modbus_write_register ( ctx, run_stop_addr, 0 ) == -1 ) {
+                _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
+
+                return false;
             }
 
-            return false;
+            return true;
         }
 
         bool turn_on_motor ( void )
         {
-            if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == 1 ) {
-                return true;
+            ASSERT ( ctx );
+
+            if ( ctx == NULL ) { return false; }
+
+            if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == -1 ) {
+
+                _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
+                return false;
             }
 
-            return false;
+            return true;
         }
 
         bool update_rpm ( unsigned int rpm )
@@ -78,6 +190,11 @@ class VFD
             // hZ value is in decimal * 10, 60.0hZ is 600 decimal
             uint16_t hZ = ( uint16_t ) ( converted_rpm * 10.0f );
 
+            // construction of a modbus message
+
+            // 01 10 09 1b 00 02 04 02 58 00 01 5a 66
+
+            // breakdown
             // 01 node address
             // 10 command (write registers)
             // 09 1b register to write to 9.26
@@ -86,10 +203,9 @@ class VFD
             // 02 58 00 01 data to send 0258 to 9.26 and 0001 to 9.27
             // 5a 66 crc
 
-            // 01 10 09 1b 00 02 04 02 58 00 01 5a 66
 
-            // send to VFD as one command.
-            uint16_t data[2];
+            // send to VFD.
+            uint16_t data[4];
 
             data[0] = ( hZ >> 8 );
             data[1] = ( hZ & 0xff );
@@ -97,16 +213,25 @@ class VFD
             data[2] = 0;
             data[3] = 0; // motor on/off
 
-            if ( modbus_write_register ( ctx, hz_addr, hZ ) == 1 ) {
-                return true;
+            ASSERT ( ctx );
+
+            if ( ctx == NULL ) { return false; }
+
+            if ( modbus_write_register ( ctx, hz_addr, hZ ) == -1 ) {
+
+                _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
+
+                return false;
             }
 
-            return false;
+            return true;
         }
 
     private:
 
+        // this is a clone of the one in the dialog, should be in one place.
         modbus_t *ctx;
+
         // conversion from VFD RPM to spindle RPM
         double ratio;
 };
