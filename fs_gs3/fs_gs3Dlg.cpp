@@ -16,30 +16,24 @@ class VFD
 {
     public:
 
-        VFD()
-        {
+        VFD() {
             ratio = 1.44;
         }
         // display shows motor rpm, but we have to send VFD RPM
-        void set_ratio ( double new_ratio )
-        {
+        void set_ratio ( double new_ratio ) {
             ratio = new_ratio;
         }
 
-        bool motor_running ( void )
-        {
+        bool motor_running ( void ) {
             return false;
         }
-        bool turn_off_motor ( void )
-        {
+        bool turn_off_motor ( void ) {
             return false;
         }
-        bool turn_on_motor ( void )
-        {
+        bool turn_on_motor ( void ) {
             return false;
         }
-        bool update_rpm ( unsigned int rpm )
-        {
+        bool update_rpm ( unsigned int rpm ) {
             double converted_rpm;
             converted_rpm = ( double ) rpm / ratio;
             return false;
@@ -89,7 +83,7 @@ END_MESSAGE_MAP()
 
 
 Cfs_gs3Dlg::Cfs_gs3Dlg ( CWnd* pParent /*=NULL*/ )
-    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent )
+    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),  ctx ( NULL )
 {
     m_hIcon = AfxGetApp()->LoadIcon ( IDR_MAINFRAME );
     // choosen RPM
@@ -277,10 +271,10 @@ void Cfs_gs3Dlg::Jog ( int direction )
     }
 }
 
-void Cfs_gs3Dlg::OnTimer ( UINT nIDEvent )
+void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
 {
     TCHAR szBuf[2048];
-    LONG lResult;
+    LRESULT lResult;
     HWND spindle_speed = NULL;
 
     // find main flashcut window
