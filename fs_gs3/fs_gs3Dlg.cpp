@@ -12,6 +12,45 @@
 #endif
 
 
+class VFD
+{
+    public:
+
+        VFD()
+        {
+            ratio = 1.44;
+        }
+        // display shows motor rpm, but we have to send VFD RPM
+        void set_ratio ( double new_ratio )
+        {
+            ratio = new_ratio;
+        }
+
+        bool motor_running ( void )
+        {
+            return false;
+        }
+        bool turn_off_motor ( void )
+        {
+            return false;
+        }
+        bool turn_on_motor ( void )
+        {
+            return false;
+        }
+        bool update_rpm ( unsigned int rpm )
+        {
+            double converted_rpm;
+            converted_rpm = ( double ) rpm / ratio;
+            return false;
+        }
+
+    private:
+        double ratio;
+};
+
+VFD *vfd;
+
 // CAboutDlg dialog used for App About
 
 class CAboutDlg : public CDialogEx
@@ -59,7 +98,6 @@ Cfs_gs3Dlg::Cfs_gs3Dlg ( CWnd* pParent /*=NULL*/ )
     //status of spindle in flashcut
     m_Spindle = false;
 
-
 }
 
 void Cfs_gs3Dlg::DoDataExchange ( CDataExchange* pDX )
@@ -68,6 +106,7 @@ void Cfs_gs3Dlg::DoDataExchange ( CDataExchange* pDX )
     DDX_Control ( pDX, IDC_EDIT1, m_RPM );
     DDX_Control ( pDX, IDC_SPINDLE, m_SpindleState );
     DDX_Control ( pDX, IDC_STATUS, m_Status );
+    DDX_Control ( pDX, IDC_COM_PORT, m_COMPort );
 }
 
 BEGIN_MESSAGE_MAP ( Cfs_gs3Dlg, CDialogEx )
@@ -75,6 +114,8 @@ BEGIN_MESSAGE_MAP ( Cfs_gs3Dlg, CDialogEx )
     ON_WM_PAINT()
     ON_WM_TIMER()
     ON_WM_QUERYDRAGICON()
+    ON_BN_CLICKED ( IDC_CONNECT, &Cfs_gs3Dlg::OnBnClickedConnect )
+    ON_EN_CHANGE ( IDC_COM_PORT, &Cfs_gs3Dlg::OnEnChangeComPort )
 END_MESSAGE_MAP()
 
 
@@ -109,40 +150,36 @@ BOOL Cfs_gs3Dlg::OnInitDialog()
     SetIcon ( m_hIcon, TRUE );			// Set big icon
     SetIcon ( m_hIcon, FALSE );		// Set small icon
 
-    // TODO: Add extra initialization here
+    // TODO: Add extra initi
+
+    m_COMPort.SetWindowTextW ( _T ( "COM1" ) );
+    vfd = new VFD;
 
     // not connected
     m_Status.SetWindowText ( _T ( "Motor not connected" ) );
 
-    SetTimer ( 1, 100, NULL );
-    modbus_t *ctx;
-    uint16_t tab_reg[64];
-    int rc;
-    int i;
+    SetTimer ( 1, 10, NULL );
 
-    ctx = modbus_new_rtu ( "COM1", 115200, 'N', 8, 1 );
+    if ( 0 ) {
 
-    if ( modbus_connect ( ctx ) == -1 ) {
-        _RPT1 ( _CRT_WARN, "Connection failed: %s\n", modbus_strerror ( errno ) );
+        uint16_t tab_reg[64];
+        int rc;
+        int i;
+
+        rc = modbus_read_input_registers ( ctx, 0, 10, tab_reg );
+
+        if ( rc == -1 ) {
+            _RPT1 ( _CRT_WARN, "%s\n", modbus_strerror ( errno ) );
+            return -1;
+        }
+
+        for ( i = 0; i < rc; i++ ) {
+            _RPT2 ( _CRT_WARN, "reg[%d]=%d (0x%X)\n", i, tab_reg[i], tab_reg[i] );
+        }
+
+        modbus_close ( ctx );
         modbus_free ( ctx );
-        return -1;
     }
-
-    modbus_set_slave ( ctx, 1 );
-
-    rc = modbus_read_input_registers ( ctx, 0, 10, tab_reg );
-
-    if ( rc == -1 ) {
-        _RPT1 ( _CRT_WARN, "%s\n", modbus_strerror ( errno ) );
-        return -1;
-    }
-
-    for ( i = 0; i < rc; i++ ) {
-        _RPT2 ( _CRT_WARN, "reg[%d]=%d (0x%X)\n", i, tab_reg[i], tab_reg[i] );
-    }
-
-    modbus_close ( ctx );
-    modbus_free ( ctx );
 
     return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -161,9 +198,10 @@ void Cfs_gs3Dlg::OnSysCommand ( UINT nID, LPARAM lParam )
 BOOL CALLBACK EnumWindowsProc ( HWND hwnd, LPARAM lParam )
 {
     char buffer[256];
-    int written = GetWindowTextA ( hwnd, buffer, sizeof ( buffer ) / sizeof ( buffer[0] ) - 1 );
 
-    if ( written && strstr ( buffer, "FlashCut CNC - " ) != NULL ) {
+    int text_length = GetWindowTextA ( hwnd, buffer, sizeof ( buffer ) / sizeof ( buffer[0] ) - 1 );
+
+    if ( text_length && strstr ( buffer, "FlashCut CNC - " ) != NULL ) {
         * ( HWND* ) lParam = hwnd;
         return FALSE;
     }
@@ -201,7 +239,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
             // Z-
             // start moving
             ::SendMessage ( hwnd, FC_Z_MINUS, 0, 0 );
-            //stop moving
+            // stop moving
             ::SendMessage ( hwnd, FC_Z_MINUS, 1, 0 );
             break;
 
@@ -209,7 +247,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
             // X+
             // start moving
             ::SendMessage ( hwnd, FC_X_PLUS, 0, 0 );
-            //stop moving
+            // stop moving
             ::SendMessage ( hwnd, FC_X_PLUS, 1, 0 );
             break;
 
@@ -217,7 +255,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
             // X-
             // start moving
             ::SendMessage ( hwnd, FC_X_MINUS, 0, 0 );
-            //stop moving
+            // stop moving
             ::SendMessage ( hwnd, FC_X_MINUS, 1, 0 );
             break;
 
@@ -225,7 +263,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
             // Y+
             // start moving
             ::SendMessage ( hwnd, FC_Y_PLUS, 0, 0 );
-            //stop moving
+            // stop moving
             ::SendMessage ( hwnd, FC_Y_PLUS, 1, 0 );
             break;
 
@@ -233,7 +271,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
             // Y-
             // start moving
             ::SendMessage ( hwnd, FC_Y_MINUS, 0, 0 );
-            //stop moving
+            // stop moving
             ::SendMessage ( hwnd, FC_Y_MINUS, 1, 0 );
             break;
     }
@@ -319,8 +357,6 @@ void Cfs_gs3Dlg::OnTimer ( UINT nIDEvent )
         m_RPM.SetWindowText ( _T ( "-3" ) );
     }
 
-    // if we get to here, spindle state is known m_Spindle (on/off) and speed in m_RPM
-
     // update the button state
     m_SpindleState.SetCheck ( m_Spindle );
 
@@ -331,6 +367,33 @@ void Cfs_gs3Dlg::OnTimer ( UINT nIDEvent )
 
         m_SpindleState.SetWindowText ( _T ( "Spindle (Off)" ) );
     }
+
+    // if we get to here, spindle state is known m_Spindle (on/off) and speed in m_RPM
+
+    // send to VFD
+
+    // check if motor is running
+    if ( vfd->motor_running() ) {
+
+        // yes, is state set to off?
+        if ( m_SpindleState.GetCheck() == false ) {
+            // yes, turn off motor
+            vfd->turn_off_motor();
+        }
+
+    } else {
+
+        //motor is not running, n check if spindle control is on, if it is switch on the motor
+        if ( m_SpindleState.GetCheck() == TRUE ) {
+            // turn on motor
+            vfd->turn_on_motor();
+        }
+    }
+
+    // send new RPM to GSx
+    vfd->update_rpm ( m_RPMValue );
+
+
 }
 
 void Cfs_gs3Dlg::OnPaint()
@@ -363,3 +426,31 @@ HCURSOR Cfs_gs3Dlg::OnQueryDragIcon()
     return static_cast<HCURSOR> ( m_hIcon );
 }
 
+
+
+void Cfs_gs3Dlg::OnBnClickedConnect()
+{
+    CString  comport;
+
+    m_COMPort.GetWindowText ( comport );
+
+    ctx = modbus_new_rtu ( CT2A ( ( LPCTSTR ) comport ), 115200, 'N', 8, 1 );
+
+    if ( modbus_connect ( ctx ) == -1 ) {
+
+        _RPT1 ( _CRT_WARN, "Connection failed: %s\n", modbus_strerror ( errno ) );
+
+        m_Status.SetWindowText ( _T ( "Connection failed" ) );
+
+        modbus_free ( ctx );
+        return ;
+    }
+
+    modbus_set_slave ( ctx, 1 );
+}
+
+
+void Cfs_gs3Dlg::OnEnChangeComPort()
+{
+
+}
