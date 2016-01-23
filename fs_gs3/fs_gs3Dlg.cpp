@@ -11,6 +11,7 @@
 #define new DEBUG_NEW
 #endif
 
+// names for registry
 const CString strSection	= _T ( "FCGS3" );
 const CString strCOMPort	= _T ( "COMPORT" );
 const CString strBAUDRate	= _T ( "BAUD" );
@@ -52,8 +53,6 @@ END_MESSAGE_MAP()
 
 
 // Cfs_gs3Dlg dialog
-
-
 
 Cfs_gs3Dlg::Cfs_gs3Dlg ( CWnd* pParent /*=NULL*/ )
     : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),  ctx ( NULL )
@@ -494,14 +493,13 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
 
     // GSx drives seem to default to ASCII,7 vs RTU,8.
 
-
     // pull in default values from registry, or use defaults
     uint32_t  baud = pApp->GetProfileInt ( strSection, strBAUDRate , 115200 );
     uint8_t bits = pApp->GetProfileInt ( strSection, strBits, 8 );
     double stopbits = pApp->GetProfileInt ( strSection, strStopBits, 1 ) / 10.0;
     uint8_t parity = pApp->GetProfileInt ( strSection, strStopBits, 'N' );
 
-    ctx = modbus_new_rtu ( CT2A ( ( LPCTSTR ) comPort ), baud, parity, bits, stopbits );
+    ctx = modbus_new_rtu ( CT2A ( ( LPCTSTR ) comPort ), baud, parity, bits, ( int ) stopbits );
 
     if ( modbus_connect ( ctx ) == -1 ) {
 
@@ -560,16 +558,6 @@ void Cfs_gs3Dlg::OnEnChangeComPort()
 
 void Cfs_gs3Dlg::OnBnClickedSerconfig()
 {
-    CWinApp* pApp = AfxGetApp();
-    ASSERT ( pApp );
-
-    if ( pApp == NULL ) {
-        return;
-    }
-
     SerialSetup dlg ;
-
     dlg.DoModal();
-
-
 }

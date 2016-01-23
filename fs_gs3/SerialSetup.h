@@ -8,7 +8,6 @@ extern const CString strStopBits;
 extern const CString strParity;
 extern const CString strBits;
 
-
 // SerialSetup dialog
 
 class SerialSetup : public CDialogEx
@@ -34,9 +33,7 @@ class SerialSetup : public CDialogEx
         double		m_StopBits;
         uint8_t		m_Parity;
         CWinApp* pApp;
-
         CComboBox m_BaudRate;
-//	CComboBox m;
         CComboBox m_BitsCombo;
         CComboBox m_ParityCombo;
         CComboBox m_StopBitsCombo;

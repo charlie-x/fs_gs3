@@ -97,7 +97,6 @@ void SerialSetup::OnCbnKillfocusParity()
 
     if ( temp == "N" ) {
         pApp->WriteProfileInt ( strSection, strParity, 'N' );
-        m_Parity = 'N';
     }
 }
 
