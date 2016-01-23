@@ -17,7 +17,8 @@ const CString strCOMPort	= _T ( "COMPORT" );
 const CString strBAUDRate	= _T ( "BAUD" );
 const CString strStopBits	= _T ( "STOP" );
 const CString strParity		= _T ( "PARITY" );
-const CString strBits		= _T ( "BITS" );
+const CString strBits       = _T ( "BITS" );
+const CString strRatio      = _T ( "RATIO" );
 
 // CAboutDlg dialog used for App About
 
@@ -67,7 +68,6 @@ void Cfs_gs3Dlg::DoDataExchange ( CDataExchange* pDX )
     DDX_Control ( pDX, IDC_EDIT1, m_RPM );
     DDX_Control ( pDX, IDC_SPINDLE, m_SpindleState );
     DDX_Control ( pDX, IDC_STATUS, m_Status );
-    DDX_Control ( pDX, IDC_COM_PORT, m_COMPort );
 }
 
 BEGIN_MESSAGE_MAP ( Cfs_gs3Dlg, CDialogEx )
@@ -76,7 +76,6 @@ BEGIN_MESSAGE_MAP ( Cfs_gs3Dlg, CDialogEx )
     ON_WM_TIMER()
     ON_WM_QUERYDRAGICON()
     ON_BN_CLICKED ( IDC_CONNECT, &Cfs_gs3Dlg::OnBnClickedConnect )
-    ON_EN_CHANGE ( IDC_COM_PORT, &Cfs_gs3Dlg::OnEnChangeComPort )
     ON_BN_CLICKED ( IDC_SERCONFIG, &Cfs_gs3Dlg::OnBnClickedSerconfig )
 END_MESSAGE_MAP()
 
@@ -120,20 +119,6 @@ BOOL Cfs_gs3Dlg::OnInitDialog()
     SetIcon ( m_hIcon, FALSE );		// Set small icon
 
     // TODO: Add extra init here
-
-    // Default
-    CString  comPort ;
-
-    // read from registry?
-    comPort = pApp->GetProfileString ( strSection, strCOMPort );
-
-    // write a default
-    if ( comPort.IsEmpty() ) {
-        comPort = _T ( "COM1" );
-        pApp->WriteProfileString ( strSection, strCOMPort, comPort );
-    }
-
-    m_COMPort.SetWindowTextW ( comPort );
 
     vfd = new VFD;
     ASSERT ( vfd );
@@ -494,7 +479,6 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
     // read from registry?
     comPort = pApp->GetProfileString ( strSection, strCOMPort );
 
-    // failed to read
     if ( comPort.IsEmpty() ) {
         return;
     }
@@ -565,9 +549,10 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
     SetTimer ( 1, 10, NULL );
 }
 
-
-void Cfs_gs3Dlg::OnEnChangeComPort()
+void Cfs_gs3Dlg::OnBnClickedSerconfig()
 {
+    SerialSetup dlg ;
+    dlg.DoModal();
     CWinApp* pApp = AfxGetApp();
     ASSERT ( pApp );
 
@@ -575,20 +560,8 @@ void Cfs_gs3Dlg::OnEnChangeComPort()
         return;
     }
 
-    // save to registry
-    CString  comPort;
-
-    m_COMPort.GetWindowText ( comPort );
-
-    if ( !comPort.IsEmpty() ) {
-
-        pApp->WriteProfileString ( strSection, strCOMPort, comPort );
-    }
-}
+    /// update
+    vfd->set_ratio ( _ttof ( pApp->GetProfileString ( strSection, strRatio, _T ( "1.105" ) ) ) );
 
 
-void Cfs_gs3Dlg::OnBnClickedSerconfig()
-{
-    SerialSetup dlg ;
-    dlg.DoModal();
 }

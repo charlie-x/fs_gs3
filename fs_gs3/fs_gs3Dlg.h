@@ -88,16 +88,19 @@ class VFD
 
     public:
 
-        VFD() : ratio ( 1.105 ), status2_read ( false ), ctx ( NULL )  {
+        VFD() : ratio ( 1.105 ), status2_read ( false ), ctx ( NULL )
+        {
 
         }
 
-        void  set_ctx ( modbus_t *pctx ) {
+        void  set_ctx ( modbus_t *pctx )
+        {
             ctx = pctx;
         }
 
         // display shows motor rpm, but we have to send VFD RPM
-        void set_ratio ( double new_ratio ) {
+        void set_ratio ( double new_ratio )
+        {
             ratio = new_ratio;
         }
 
@@ -145,7 +148,8 @@ class VFD
 
         bool status2_read;
 
-        bool control_frequency ( void ) {
+        bool control_frequency ( void )
+        {
 
             if ( status2_read == false ) {
                 if ( read_status_2() == false ) {
@@ -156,7 +160,8 @@ class VFD
             return ( status_monitor_2.freq_src_1 == 1 );
         }
 
-        bool control_motor ( void ) {
+        bool control_motor ( void )
+        {
 
             if ( status2_read == false ) {
                 if ( read_status_2() == false ) {
@@ -169,7 +174,8 @@ class VFD
 
         }
 
-        bool read_status_2 ( void ) {
+        bool read_status_2 ( void )
+        {
 
             ASSERT ( ctx );
 
@@ -189,7 +195,8 @@ class VFD
             return true;
         }
 
-        int motor_running ( void ) {
+        int motor_running ( void )
+        {
 
             if ( read_status_2()  == true ) {
 
@@ -225,7 +232,8 @@ class VFD
             return -1;
         }
 
-        bool turn_off_motor ( void ) {
+        bool turn_off_motor ( void )
+        {
 
             ASSERT ( ctx );
 
@@ -244,7 +252,8 @@ class VFD
             return true;
         }
 
-        bool turn_on_motor ( void ) {
+        bool turn_on_motor ( void )
+        {
             ASSERT ( ctx );
 
             if ( ctx == NULL ) {
@@ -262,18 +271,19 @@ class VFD
             return true;
         }
 
-        bool update_rpm ( unsigned int rpm ) {
+        bool update_rpm ( unsigned int rpm )
+        {
             double  converted_rpm;
 
             // convert spindle to motor RPM
-            converted_rpm = ( double ) rpm / ratio;
+
+            if ( ratio ) {
+                converted_rpm = ( double ) rpm / ratio;
+
+            } else { converted_rpm = rpm; }
 
             // convert rpm to hZ
-
-            // for now testing
-            //converted_rpm = 20;
-
-            // hZ value is in decimal * 10, 60.0hZ is 600 decimal
+            // hZ value
             uint16_t hZ = ( uint16_t ) ( converted_rpm / 7 );
 
             // construction of a modbus message
@@ -289,23 +299,13 @@ class VFD
             // 02 58 00 01 data to send 0258 to 9.26 and 0001 to 9.27
             // 5a 66 crc
 
-
-            // send to VFD.
-            uint16_t data[4];
-
-            data[0] = ( hZ >> 8 );
-            data[1] = ( hZ & 0xff );
-
-            data[2] = 0;
-            data[3] = 0; // motor on/off
-
             ASSERT ( ctx );
 
             if ( ctx == NULL ) {
                 return false;
             }
 
-            // hardcoded for testing
+            // hard coded for testing
             // 208hZ = 1635 motor RPM
             // 104hZ = 797
             // 113hZ = 880
@@ -341,7 +341,8 @@ class Cfs_gs3Dlg : public CDialogEx
 // Construction
     public:
         Cfs_gs3Dlg ( CWnd* pParent = NULL );	// standard constructor
-        ~Cfs_gs3Dlg() {
+        ~Cfs_gs3Dlg()
+        {
             if ( ctx ) {
 
                 modbus_close ( ctx );
@@ -384,7 +385,6 @@ class Cfs_gs3Dlg : public CDialogEx
         CButton m_SpindleState;
         // status of connection
         CStatic m_Status;
-        CEdit m_COMPort;
         afx_msg void OnBnClickedConnect();
         afx_msg void OnEnChangeComPort();
         afx_msg void OnBnClickedSerconfig();
