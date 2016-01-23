@@ -386,7 +386,7 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
 
         if ( vfd->update_rpm ( m_RPMValue ) == false ) {
 
-            m_Status.SetWindowText ( _T ( "Unable to setup RPM in VFD" ) );
+            m_Status.SetWindowText ( _T ( "Unable to update RPM in VFD" ) );
 
             // wasn't able to pass to VFD, drop out early
             return;
@@ -398,6 +398,7 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
     // if keypad stop is pressed, then don't turn the motor back on, regardless of setting?
     // caching state will do that, but prefer a better way. motor will change state to slowing ,
     // so if spindle on + motor slowing = keypad stop pressed?
+    // todo: even better if we detect that the keypad stopped the motor and updates flashcut
 
     if ( last_motor_state != m_SpindleState.GetCheck() ) {
 
@@ -526,7 +527,7 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
     // switch on debug mode
     modbus_set_debug ( ctx, 1 );
 
-    //copy over to VFD class..todo: fix
+    // copy over to VFD class..todo: fix
     vfd->set_ctx ( ctx );
 
     if ( modbus_set_slave ( ctx, 1 ) == -1 ) {
@@ -591,4 +592,36 @@ void Cfs_gs3Dlg::OnBnClickedSerconfig()
 {
     SerialSetup dlg ;
     dlg.DoModal();
+}
+
+
+void Cfs_gs3Dlg::PostNcDestroy()
+{
+    CDialogEx::PostNcDestroy();
+}
+
+
+void Cfs_gs3Dlg::OnCancel()
+{
+    // ask if turn off motor if program closes,since accidental close
+    if ( ctx &&  vfd->motor_running() == 1 ) {
+        if ( AfxMessageBox ( _T ( "Spindle is running, turn it off? " ), MB_YESNO ) == IDYES ) {
+            vfd->turn_off_motor();
+        }
+    }
+
+    CDialogEx::OnCancel();
+}
+
+
+void Cfs_gs3Dlg::OnOK()
+{
+    // ask if turn off motor if program closes,since accidental close
+    if ( ctx && vfd->motor_running() == 1 ) {
+        if ( AfxMessageBox ( _T ( "Spindle is running, turn it off? " ), MB_YESNO ) == IDYES ) {
+            vfd->turn_off_motor();
+        }
+    }
+
+    CDialogEx::OnOK();
 }

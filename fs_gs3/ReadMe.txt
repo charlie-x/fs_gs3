@@ -37,8 +37,8 @@ Instructions
     Run and it set the RPM, use Spindle(On)/Spindle(Off) to switch it on and off, quitting this program won't turn off the spindle (yet)
 
 Todo
-	Change the serial COM port to use >9 modern windows style
+    Change the serial COM port to use >9 modern windows style
     Warn user on exit if spindle is on
-	Add motor to spindle ratio to config screen mines about rpm/1.101/7
+    Add motor to spindle ratio to config screen mines about rpm/1.101/7
     Add display of status parameters
     Graphs n stuff !

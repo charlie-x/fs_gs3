@@ -71,17 +71,6 @@ class VFD
             control_freq_addr   = MODBUS_CMD ( 4, 0 ),
             control_drive_addr  = MODBUS_CMD ( 3, 0 ),
 
-            // status monitors
-            // wrong
-            // NN CC DD DD VV VV CR C
-            // 01 03 bd 42 00 02 40 73
-
-            // right
-            // NN CC DD DD VV VV CR C
-            // 01 03 21 00 00 01 8e 36
-            // 01 03 21 01 00 10 1f fa
-            // 01 03 09 29 00 02 16 5f
-
             status_monitor_2_addr = MODBUS_CMD ( 0x21, 01 ) //(BD42)
 
         } ;
@@ -388,4 +377,7 @@ class Cfs_gs3Dlg : public CDialogEx
         afx_msg void OnBnClickedConnect();
         afx_msg void OnEnChangeComPort();
         afx_msg void OnBnClickedSerconfig();
+        virtual void PostNcDestroy();
+        virtual void OnCancel();
+        virtual void OnOK();
 };
