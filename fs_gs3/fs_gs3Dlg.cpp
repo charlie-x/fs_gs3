@@ -11,39 +11,13 @@
 #define new DEBUG_NEW
 #endif
 
-
-class VFD
-{
-    public:
-
-        VFD() {
-            ratio = 1.44;
-        }
-        // display shows motor rpm, but we have to send VFD RPM
-        void set_ratio ( double new_ratio ) {
-            ratio = new_ratio;
-        }
-
-        bool motor_running ( void ) {
-            return false;
-        }
-        bool turn_off_motor ( void ) {
-            return false;
-        }
-        bool turn_on_motor ( void ) {
-            return false;
-        }
-        bool update_rpm ( unsigned int rpm ) {
-            double converted_rpm;
-            converted_rpm = ( double ) rpm / ratio;
-            return false;
-        }
-
-    private:
-        double ratio;
-};
-
-VFD *vfd;
+// names for registry
+const CString strSection	= _T ( "FCGS3" );
+const CString strCOMPort	= _T ( "COMPORT" );
+const CString strBAUDRate	= _T ( "BAUD" );
+const CString strStopBits	= _T ( "STOP" );
+const CString strParity		= _T ( "PARITY" );
+const CString strBits		= _T ( "BITS" );
 
 // CAboutDlg dialog used for App About
 
@@ -80,17 +54,10 @@ END_MESSAGE_MAP()
 
 // Cfs_gs3Dlg dialog
 
-
-
 Cfs_gs3Dlg::Cfs_gs3Dlg ( CWnd* pParent /*=NULL*/ )
-    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),  ctx ( NULL )
+    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),  ctx ( NULL ), m_RPMValue ( 0 ), m_Spindle ( false )
 {
     m_hIcon = AfxGetApp()->LoadIcon ( IDR_MAINFRAME );
-    // choosen RPM
-    m_RPMValue = 0;
-
-    //status of spindle in flashcut
-    m_Spindle = false;
 
 }
 
@@ -110,6 +77,7 @@ BEGIN_MESSAGE_MAP ( Cfs_gs3Dlg, CDialogEx )
     ON_WM_QUERYDRAGICON()
     ON_BN_CLICKED ( IDC_CONNECT, &Cfs_gs3Dlg::OnBnClickedConnect )
     ON_EN_CHANGE ( IDC_COM_PORT, &Cfs_gs3Dlg::OnEnChangeComPort )
+    ON_BN_CLICKED ( IDC_SERCONFIG, &Cfs_gs3Dlg::OnBnClickedSerconfig )
 END_MESSAGE_MAP()
 
 
@@ -117,6 +85,13 @@ END_MESSAGE_MAP()
 
 BOOL Cfs_gs3Dlg::OnInitDialog()
 {
+    CWinApp* pApp = AfxGetApp();
+    ASSERT ( pApp );
+
+    if ( pApp == NULL ) {
+        return FALSE;
+    }
+
     CDialogEx::OnInitDialog();
 
     // Add "About..." menu item to system menu.
@@ -144,15 +119,32 @@ BOOL Cfs_gs3Dlg::OnInitDialog()
     SetIcon ( m_hIcon, TRUE );			// Set big icon
     SetIcon ( m_hIcon, FALSE );		// Set small icon
 
-    // TODO: Add extra initi
+    // TODO: Add extra init here
 
-    m_COMPort.SetWindowTextW ( _T ( "COM1" ) );
+    // Default
+    CString  comPort ;
+
+    // read from registry?
+    comPort = pApp->GetProfileString ( strSection, strCOMPort );
+
+    // write a default
+    if ( comPort.IsEmpty() ) {
+        comPort = _T ( "COM1" );
+        pApp->WriteProfileString ( strSection, strCOMPort, comPort );
+    }
+
+    m_COMPort.SetWindowTextW ( comPort );
+
     vfd = new VFD;
+    ASSERT ( vfd );
+
+    // critical requirement
+    if ( vfd == NULL ) {
+        return FALSE;
+    }
 
     // not connected
     m_Status.SetWindowText ( _T ( "Motor not connected" ) );
-
-    SetTimer ( 1, 10, NULL );
 
     if ( 0 ) {
 
@@ -195,14 +187,21 @@ BOOL CALLBACK EnumWindowsProc ( HWND hwnd, LPARAM lParam )
 
     int text_length = GetWindowTextA ( hwnd, buffer, sizeof ( buffer ) / sizeof ( buffer[0] ) - 1 );
 
+    // using the " - " differentiates from popup child windows. (check parent is desktop?)
     if ( text_length && strstr ( buffer, "FlashCut CNC - " ) != NULL ) {
         * ( HWND* ) lParam = hwnd;
         return FALSE;
     }
 
+    * ( HWND* ) lParam = NULL;
     return TRUE;
 }
 
+/**
+ * Find FlashCut window
+ *
+ * Returns: hWnd of GUI
+ */
 HWND GetFlashCutHWND ( void )
 {
     HWND hWnd = NULL;
@@ -221,23 +220,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
 
     switch ( direction ) 	{
 
-        case 0:
-            // Z+
-            // start moving
-            ::SendMessage ( hwnd, FC_Z_PLUS, 0, 0 );
-            // stop moving
-            ::SendMessage ( hwnd, FC_Z_PLUS, 1, 0 );
-            break;
-
-        case 1:
-            // Z-
-            // start moving
-            ::SendMessage ( hwnd, FC_Z_MINUS, 0, 0 );
-            // stop moving
-            ::SendMessage ( hwnd, FC_Z_MINUS, 1, 0 );
-            break;
-
-        case 2:
+        case JOG_X_PLUS:
             // X+
             // start moving
             ::SendMessage ( hwnd, FC_X_PLUS, 0, 0 );
@@ -245,7 +228,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
             ::SendMessage ( hwnd, FC_X_PLUS, 1, 0 );
             break;
 
-        case 3:
+        case JOG_X_MINUS:
             // X-
             // start moving
             ::SendMessage ( hwnd, FC_X_MINUS, 0, 0 );
@@ -253,7 +236,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
             ::SendMessage ( hwnd, FC_X_MINUS, 1, 0 );
             break;
 
-        case 4:
+        case JOG_Y_PLUS:
             // Y+
             // start moving
             ::SendMessage ( hwnd, FC_Y_PLUS, 0, 0 );
@@ -261,12 +244,28 @@ void Cfs_gs3Dlg::Jog ( int direction )
             ::SendMessage ( hwnd, FC_Y_PLUS, 1, 0 );
             break;
 
-        case 5:
+        case JOG_Y_MINUS:
             // Y-
             // start moving
             ::SendMessage ( hwnd, FC_Y_MINUS, 0, 0 );
             // stop moving
             ::SendMessage ( hwnd, FC_Y_MINUS, 1, 0 );
+            break;
+
+        case JOG_Z_PLUS:
+            // Z+
+            // start moving
+            ::SendMessage ( hwnd, FC_Z_PLUS, 0, 0 );
+            // stop moving
+            ::SendMessage ( hwnd, FC_Z_PLUS, 1, 0 );
+            break;
+
+        case JOG_Z_MINUS:
+            // Z-
+            // start moving
+            ::SendMessage ( hwnd, FC_Z_MINUS, 0, 0 );
+            // stop moving
+            ::SendMessage ( hwnd, FC_Z_MINUS, 1, 0 );
             break;
     }
 }
@@ -274,6 +273,7 @@ void Cfs_gs3Dlg::Jog ( int direction )
 void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
 {
     TCHAR szBuf[2048];
+
     LRESULT lResult;
     HWND spindle_speed = NULL;
 
@@ -281,9 +281,8 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
     HWND hwnd = GetFlashCutHWND();
 
     if ( hwnd == NULL ) {
-        m_RPM.SetWindowText ( _T ( "-0" ) );
+        m_Status.SetWindowText ( _T ( "Couldn't find flashcut" ) );
         return;
-
     }
 
     // Spindle On/Off,
@@ -293,13 +292,12 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
         button_spindle = ::FindWindowEx ( hwnd, NULL, _T ( "Button" ), _T ( "Spindle (On)" ) );
 
         if ( button_spindle == NULL ) {
-            m_RPM.SetWindowText ( _T ( "-1" ) );
+            m_Status.SetWindowText ( _T ( "Can't find Spindle RPM" ) );
             return;
 
         } else {
             // spindle is On
             m_Spindle = true;
-
         }
 
     } else {
@@ -313,13 +311,26 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
     HWND static_spindle_text = ::FindWindowEx ( hwnd, NULL, _T ( "Static" ), _T ( "Spindle RPM" ) );
 
     if ( static_spindle_text == NULL ) {
-        m_RPM.SetWindowText ( _T ( "-1" ) );
+        m_SpindleState.SetWindowText ( _T ( "-1" ) );
         return;
     }
 
     // iterate to right control
     spindle_speed = ::GetWindow ( static_spindle_text, GW_HWNDNEXT );
+    ASSERT ( spindle_speed );
+
+    if ( spindle_speed == NULL ) {
+        m_Status.SetWindowText ( _T ( "Can't find control" ) );
+        return;
+    }
+
     spindle_speed = ::GetWindow ( spindle_speed, GW_HWNDNEXT );
+    ASSERT ( spindle_speed );
+
+    if ( spindle_speed == NULL ) {
+        m_Status.SetWindowText ( _T ( "Can't find control 2" ) );
+        return;
+    }
 
     TCHAR className[256];
 
@@ -328,13 +339,9 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
 
     // check is class ComboBox
     if ( StrCmp ( className, _T ( "ComboBox" ) ) != 0 ) {
-        m_RPM.SetWindowText ( _T ( "-2" ) );
+        m_Status.SetWindowText ( _T ( "Can't find spindle control" ) );
         return;
     }
-
-    // less precise way of finding it.
-//	spindle_speed = ::FindWindowEx(hwnd, NULL, _T("msctls_trackbar32"), 0);
-//	spindle_speed = ::GetWindow(spindle_speed, GW_HWNDNEXT);
 
     // fetch RPM  value
     lResult = ::SendMessage ( spindle_speed, WM_GETTEXT, sizeof ( szBuf ) / sizeof ( szBuf[0] ), ( LPARAM ) szBuf );
@@ -354,6 +361,7 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
     // update the button state
     m_SpindleState.SetCheck ( m_Spindle );
 
+    // show status
     if ( m_Spindle ) {
         m_SpindleState.SetWindowText ( _T ( "Spindle (On)" ) );
 
@@ -363,31 +371,59 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
     }
 
     // if we get to here, spindle state is known m_Spindle (on/off) and speed in m_RPM
+    // from flashcut
 
     // send to VFD
 
-    // check if motor is running
-    if ( vfd->motor_running() ) {
+    // adds about 300ms of latency when not connected to VFD for each call, timeout on libmodbus?
 
-        // yes, is state set to off?
-        if ( m_SpindleState.GetCheck() == false ) {
+    // send new RPM to GSx, comms are slow to VFD so only update when you need too
+    static int rpm = -1;
+
+    if ( rpm != m_RPMValue ) {
+
+        if ( vfd->update_rpm ( m_RPMValue ) == false ) {
+
+            m_Status.SetWindowText ( _T ( "Unable to setup RPM in VFD" ) );
+
+            // wasn't able to pass to VFD, drop out early
+            return;
+        }
+    }
+
+    // check if motor is running
+    int motor_status;
+
+    // check motor status
+    motor_status = vfd->motor_running();
+
+    if ( motor_status == 1 ) {
+
+        // yes is running, is GUI button set to off?
+        if ( m_SpindleState.GetCheck() == FALSE ) {
             // yes, turn off motor
             vfd->turn_off_motor();
         }
 
-    } else {
+        // otherwise leave it alone, already running.
 
-        //motor is not running, n check if spindle control is on, if it is switch on the motor
-        if ( m_SpindleState.GetCheck() == TRUE ) {
-            // turn on motor
-            vfd->turn_on_motor();
+    } else
+        if ( motor_status == 0 ) {
+
+            // motor is not running, then check if spindle control is on, if it is switch on the motor
+            if ( m_SpindleState.GetCheck() == TRUE ) {
+                // turn on motor
+                vfd->turn_on_motor();
+            }
+
+            // otherwise leave it alone, already stopped
+
+        } else {
+            m_Status.SetWindowText ( _T ( "Error in reading VFD state" ) );
+
+            // somethings wrong
+            return;
         }
-    }
-
-    // send new RPM to GSx
-    vfd->update_rpm ( m_RPMValue );
-
-
 }
 
 void Cfs_gs3Dlg::OnPaint()
@@ -420,15 +456,43 @@ HCURSOR Cfs_gs3Dlg::OnQueryDragIcon()
     return static_cast<HCURSOR> ( m_hIcon );
 }
 
-
-
 void Cfs_gs3Dlg::OnBnClickedConnect()
 {
-    CString  comport;
+    // quick out
+    if ( ctx ) {
 
-    m_COMPort.GetWindowText ( comport );
+        // already opened?
+        m_Status.SetWindowText ( _T ( "Already opened!" ) );
 
-    ctx = modbus_new_rtu ( CT2A ( ( LPCTSTR ) comport ), 115200, 'N', 8, 1 );
+        return;
+    }
+
+    CWinApp* pApp = AfxGetApp();
+    ASSERT ( pApp );
+
+    if ( pApp == NULL ) {
+        return;
+    }
+
+    CString  comPort;
+
+    // read from registry?
+    comPort = pApp->GetProfileString ( strSection, strCOMPort );
+
+    // failed to read
+    if ( comPort.IsEmpty() ) {
+        return;
+    }
+
+    // GSx drives seem to default to ASCII,7 vs RTU,8.
+
+    // pull in default values from registry, or use defaults
+    uint32_t  baud = pApp->GetProfileInt ( strSection, strBAUDRate , 115200 );
+    uint8_t bits = pApp->GetProfileInt ( strSection, strBits, 8 );
+    double stopbits = pApp->GetProfileInt ( strSection, strStopBits, 1 ) / 10.0;
+    uint8_t parity = pApp->GetProfileInt ( strSection, strStopBits, 'N' );
+
+    ctx = modbus_new_rtu ( CT2A ( ( LPCTSTR ) comPort ), baud, parity, bits, ( int ) stopbits );
 
     if ( modbus_connect ( ctx ) == -1 ) {
 
@@ -437,14 +501,56 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
         m_Status.SetWindowText ( _T ( "Connection failed" ) );
 
         modbus_free ( ctx );
+
+        ctx = NULL;
+        vfd->set_ctx ( ctx );
+
         return ;
     }
 
-    modbus_set_slave ( ctx, 1 );
+    //copy over to VFD class..todo: fix
+    vfd->set_ctx ( ctx );
+
+    if ( modbus_set_slave ( ctx, 1 ) == -1 ) {
+
+        _RPT1 ( _CRT_WARN, "modbus_set_slave failed: %s\n", modbus_strerror ( errno ) );
+        m_Status.SetWindowText ( CString ( modbus_strerror ( errno ) ) );
+        return;
+    }
+
+    // we need to query the VFD and make sure its a valid connection here
+
+    // all good so far
+    m_Status.SetWindowText ( _T ( "Port opened" ) );
+
+    //kick off timer
+    SetTimer ( 1, 10, NULL );
 }
 
 
 void Cfs_gs3Dlg::OnEnChangeComPort()
 {
+    CWinApp* pApp = AfxGetApp();
+    ASSERT ( pApp );
 
+    if ( pApp == NULL ) {
+        return;
+    }
+
+    // save to registry
+    CString  comPort;
+
+    m_COMPort.GetWindowText ( comPort );
+
+    if ( !comPort.IsEmpty() ) {
+
+        pApp->WriteProfileString ( strSection, strCOMPort, comPort );
+    }
+}
+
+
+void Cfs_gs3Dlg::OnBnClickedSerconfig()
+{
+    SerialSetup dlg ;
+    dlg.DoModal();
 }

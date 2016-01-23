@@ -35,9 +35,11 @@
 
 
 
+
 #include "modbus.h"
 #pragma comment(lib,"modbus.lib")
 
+#include "serialsetup.h"
 
 #ifdef _UNICODE
 #if defined _M_IX86
