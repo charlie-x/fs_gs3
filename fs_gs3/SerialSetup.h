@@ -7,6 +7,7 @@ extern const CString strBAUDRate;
 extern const CString strStopBits;
 extern const CString strParity;
 extern const CString strBits;
+extern const CString strRatio;
 
 // SerialSetup dialog
 
@@ -45,4 +46,8 @@ class SerialSetup : public CDialogEx
         afx_msg void OnCbnKillfocusStopbits();
         virtual void PostNcDestroy();
         virtual BOOL OnInitDialog();
+        CEdit m_COMPort;
+        CEdit m_Ratio;
+        afx_msg void OnKillfocusComport();
+        afx_msg void OnKillfocusRatio();
 };

@@ -29,6 +29,11 @@ SerialSetup::SerialSetup ( CWnd* pParent /*=NULL*/ )
     m_StopBits  = ( double ) pApp->GetProfileInt ( strSection, strStopBits, 10 ) / 10.0;
     m_Parity	= pApp->GetProfileInt ( strSection, strParity, 'N' );
 
+    CString  comPort;
+
+    // read from registry?
+    comPort = pApp->GetProfileString ( strSection, strCOMPort, _T ( "COM1" ) );
+
     // CComboBoxes aren't created yet, can't set cursels, do that in OnInitDialog
 
 }
@@ -41,10 +46,11 @@ void SerialSetup::DoDataExchange ( CDataExchange* pDX )
 {
     CDialogEx::DoDataExchange ( pDX );
     DDX_Control ( pDX, IDC_BAUDRATE, m_BaudRate );
-    //  DDX_Control(pDX, IDC_BITS, m);
     DDX_Control ( pDX, IDC_BITS, m_BitsCombo );
     DDX_Control ( pDX, IDC_PARITY, m_ParityCombo );
     DDX_Control ( pDX, IDC_STOPBITS, m_StopBitsCombo );
+    DDX_Control ( pDX, IDC_COMPORT, m_COMPort );
+    DDX_Control ( pDX, IDC_RATIO, m_Ratio );
 }
 
 
@@ -55,6 +61,8 @@ BEGIN_MESSAGE_MAP ( SerialSetup, CDialogEx )
     ON_CBN_KILLFOCUS ( IDC_BITS, &SerialSetup::OnCbnKillfocusBits )
     ON_CBN_KILLFOCUS ( IDC_PARITY, &SerialSetup::OnCbnKillfocusParity )
     ON_CBN_KILLFOCUS ( IDC_STOPBITS, &SerialSetup::OnCbnKillfocusStopbits )
+    ON_EN_KILLFOCUS ( IDC_COMPORT, &SerialSetup::OnKillfocusComport )
+    ON_EN_KILLFOCUS ( IDC_RATIO, &SerialSetup::OnKillfocusRatio )
 END_MESSAGE_MAP()
 
 // SerialSetup message handlers
@@ -142,7 +150,35 @@ BOOL SerialSetup::OnInitDialog()
     // SelectString matches a partial
     m_StopBitsCombo.SetCurSel ( m_StopBitsCombo.FindStringExact ( 0, temp ) );
 
+    double value;
+    value = _ttof ( pApp->GetProfileString ( strSection, strRatio, _T ( "1.105" ) ) );
+    temp.Format ( _T ( "%g" ), value );
+    m_Ratio.SetWindowText ( temp );
+
+    CString  comPort;
+    // read from registry?
+    comPort = pApp->GetProfileString ( strSection, strCOMPort , _T ( "COM1" ) );
+    m_COMPort.SetWindowText ( comPort );
 
     return TRUE;  // return TRUE unless you set the focus to a control
     // EXCEPTION: OCX Property Pages should return FALSE
+}
+
+
+
+void SerialSetup::OnKillfocusComport()
+{
+    CString temp;
+    // update com port
+    m_COMPort.GetWindowText ( temp );
+    pApp->WriteProfileString ( strSection, strCOMPort,  temp  );
+}
+
+
+void SerialSetup::OnKillfocusRatio()
+{
+    CString temp;
+    // update ratio
+    m_Ratio.GetWindowText ( temp );
+    pApp->WriteProfileString ( strSection, strRatio, temp );
 }
