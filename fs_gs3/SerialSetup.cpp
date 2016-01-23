@@ -40,6 +40,7 @@ SerialSetup::SerialSetup ( CWnd* pParent /*=NULL*/ )
 
 SerialSetup::~SerialSetup()
 {
+    pApp = NULL;
 }
 
 void SerialSetup::DoDataExchange ( CDataExchange* pDX )
@@ -81,6 +82,9 @@ void SerialSetup::OnBnClickedCancel()
 
 void SerialSetup::OnCbnKillfocusBits()
 {
+
+    ASSERT ( pApp );
+
     CString temp;
     // update bits
     m_BitsCombo.GetWindowText ( temp );
@@ -90,6 +94,8 @@ void SerialSetup::OnCbnKillfocusBits()
 
 void SerialSetup::OnCbnSelchangeBaudrate()
 {
+    ASSERT ( pApp );
+
     CString temp;
     // update baud rate
     m_BaudRate.GetWindowText ( temp );
@@ -98,6 +104,8 @@ void SerialSetup::OnCbnSelchangeBaudrate()
 
 void SerialSetup::OnCbnKillfocusParity()
 {
+    ASSERT ( pApp );
+
     CString temp;
     // update parity
     m_ParityCombo.GetWindowText ( temp );
@@ -110,6 +118,8 @@ void SerialSetup::OnCbnKillfocusParity()
 
 void SerialSetup::OnCbnKillfocusStopbits()
 {
+    ASSERT ( pApp );
+
     CString temp;
     // update stop bits rate
     m_StopBitsCombo.GetWindowText ( temp );
@@ -128,6 +138,8 @@ void SerialSetup::PostNcDestroy()
 
 BOOL SerialSetup::OnInitDialog()
 {
+    ASSERT ( pApp );
+
     CDialogEx::OnInitDialog();
 
     ASSERT_VALID ( &m_BaudRate );
@@ -168,6 +180,8 @@ BOOL SerialSetup::OnInitDialog()
 
 void SerialSetup::OnKillfocusComport()
 {
+    ASSERT ( pApp );
+
     CString temp;
     // update com port
     m_COMPort.GetWindowText ( temp );
@@ -177,6 +191,8 @@ void SerialSetup::OnKillfocusComport()
 
 void SerialSetup::OnKillfocusRatio()
 {
+    ASSERT ( pApp );
+
     CString temp;
     // update ratio
     m_Ratio.GetWindowText ( temp );

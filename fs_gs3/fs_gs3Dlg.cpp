@@ -19,6 +19,8 @@ const CString strStopBits	= _T ( "STOP" );
 const CString strParity		= _T ( "PARITY" );
 const CString strBits       = _T ( "BITS" );
 const CString strRatio      = _T ( "RATIO" );
+const CString strWindowPos  = _T ( "WINDOWPOS" );
+
 
 // CAboutDlg dialog used for App About
 
@@ -56,7 +58,10 @@ END_MESSAGE_MAP()
 // Cfs_gs3Dlg dialog
 
 Cfs_gs3Dlg::Cfs_gs3Dlg ( CWnd* pParent /*=NULL*/ )
-    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),  ctx ( NULL ), m_RPMValue ( 0 ), m_Spindle ( false ), vfd ( NULL )
+    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),
+      ctx ( NULL ), m_RPMValue ( 0 ), m_Spindle ( false ),
+      vfd ( NULL ), last_motor_state ( -1 ), motor_status ( -1 ),
+      direction ( -1 )
 {
     m_hIcon = AfxGetApp()->LoadIcon ( IDR_MAINFRAME );
 
@@ -68,6 +73,8 @@ void Cfs_gs3Dlg::DoDataExchange ( CDataExchange* pDX )
     DDX_Control ( pDX, IDC_EDIT1, m_RPM );
     DDX_Control ( pDX, IDC_SPINDLE, m_SpindleState );
     DDX_Control ( pDX, IDC_STATUS, m_Status );
+    DDX_Control ( pDX, IDC_DRIVE_STATUS, m_DriveStatus );
+    DDX_Control ( pDX, IDC_DRIVE_DIRECTION, m_Direction );
 }
 
 BEGIN_MESSAGE_MAP ( Cfs_gs3Dlg, CDialogEx )
@@ -77,6 +84,7 @@ BEGIN_MESSAGE_MAP ( Cfs_gs3Dlg, CDialogEx )
     ON_WM_QUERYDRAGICON()
     ON_BN_CLICKED ( IDC_CONNECT, &Cfs_gs3Dlg::OnBnClickedConnect )
     ON_BN_CLICKED ( IDC_SERCONFIG, &Cfs_gs3Dlg::OnBnClickedSerconfig )
+    ON_WM_SHOWWINDOW()
 END_MESSAGE_MAP()
 
 
@@ -119,6 +127,9 @@ BOOL Cfs_gs3Dlg::OnInitDialog()
     SetIcon ( m_hIcon, FALSE );		// Set small icon
 
     // TODO: Add extra init here
+    last_motor_state = -1;
+    motor_status = -1;
+    direction = -1;
 
     vfd = new VFD;
     ASSERT ( vfd );
@@ -130,27 +141,6 @@ BOOL Cfs_gs3Dlg::OnInitDialog()
 
     // not connected
     m_Status.SetWindowText ( _T ( "Motor not connected" ) );
-
-    if ( 0 ) {
-
-        uint16_t tab_reg[64];
-        int rc;
-        int i;
-
-        rc = modbus_read_input_registers ( ctx, 0, 10, tab_reg );
-
-        if ( rc == -1 ) {
-            _RPT1 ( _CRT_WARN, "%s\n", modbus_strerror ( errno ) );
-            return -1;
-        }
-
-        for ( i = 0; i < rc; i++ ) {
-            _RPT2 ( _CRT_WARN, "reg[%d]=%d (0x%X)\n", i, tab_reg[i], tab_reg[i] );
-        }
-
-        modbus_close ( ctx );
-        modbus_free ( ctx );
-    }
 
     return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -378,7 +368,63 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
         }
     }
 
-    static int last_motor_state = -1;
+    // once per loop
+    vfd->read_status_2();
+
+    direction = vfd->direction();
+
+    switch ( direction ) {
+        case -1:
+            m_Direction.SetWindowText ( _T ( "Direction Error" ) );
+            break;
+
+        case 0:
+            m_Direction.SetWindowText ( _T ( "Forward" ) );
+            break;
+
+        case 1:
+            m_Direction.SetWindowText ( _T ( "Rev to Fwd" ) );
+            break;
+
+        case 2:
+            m_Direction.SetWindowText ( _T ( "Fwd To Rev" ) );
+            break;
+
+        case 3:
+            m_Direction.SetWindowText ( _T ( "Reverse" ) );
+            break;
+
+        default:
+            m_Direction.SetWindowText ( _T ( "Unknown state" ) );
+            break;
+    }
+
+    switch ( vfd->drive_state() ) {
+        case -1:
+            m_DriveStatus.SetWindowText ( _T ( "Motor Error" ) );
+            break;
+
+        case 0:
+            m_DriveStatus.SetWindowText ( _T ( "Stopped" ) );
+            break;
+
+        case 1:
+            m_DriveStatus.SetWindowText ( _T ( "Stopping" ) );
+            break;
+
+        case 2:
+            m_DriveStatus.SetWindowText ( _T ( "Standby" ) );
+            break;
+
+        case 3:
+            m_DriveStatus.SetWindowText ( _T ( "Running" ) );
+            break;
+
+        default:
+            m_DriveStatus.SetWindowText ( _T ( "Unknown state" ) );
+            break;
+
+    }
 
     // if keypad stop is pressed, then don't turn the motor back on, regardless of setting?
     // caching state will do that, but prefer a better way. motor will change state to slowing ,
@@ -390,12 +436,11 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
         last_motor_state = m_SpindleState.GetCheck();
 
         // check if motor is running
-        int motor_status;
 
         // check motor status, 0 OFF, 1 ON, -1 ERROR
         motor_status = vfd->motor_running();
 
-        if ( motor_status == 1 ) {
+        if ( motor_status == VFD::DRIVE_RUNNING ) {
 
             // yes is running, is GUI button set to off?
             if ( m_SpindleState.GetCheck() == FALSE ) {
@@ -407,7 +452,7 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
             // otherwise leave it alone, already running.
 
         } else
-            if ( motor_status == 0 ) {
+            if ( motor_status == VFD::DRIVE_STOPPED ) {
 
                 // motor is not running, then check if spindle control is on, if it is switch on the motor
                 if ( m_SpindleState.GetCheck() == TRUE ) {
@@ -425,6 +470,96 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
                     return;
                 }
     }
+}
+
+void Cfs_gs3Dlg::OnBnClickedSerconfig()
+{
+    CWinApp* pApp = AfxGetApp();
+    ASSERT ( pApp );
+
+    if ( pApp == NULL ) {
+        return;
+    }
+
+    if ( ctx ) {
+        AfxMessageBox ( _T ( "Can't config while connected!" ) );
+        return;
+    }
+
+    SerialSetup dlg;
+    dlg.DoModal();
+
+    // update ratio
+    vfd->set_ratio ( _ttof ( pApp->GetProfileString ( strSection, strRatio, _T ( "1.105" ) ) ) );
+
+}
+
+
+void Cfs_gs3Dlg::PostNcDestroy()
+{
+    CDialogEx::PostNcDestroy();
+}
+
+
+void Cfs_gs3Dlg::OnCancel()
+{
+    // ask if turn off motor if program closes,since accidental close
+    if ( ctx &&  vfd->motor_running() != VFD::DRIVE_STOPPED ) {
+        if ( AfxMessageBox ( _T ( "Spindle is running, turn it off? " ), MB_YESNO ) == IDYES ) {
+            vfd->turn_off_motor();
+        }
+    }
+
+    CDialogEx::OnCancel();
+}
+
+
+void Cfs_gs3Dlg::OnOK()
+{
+    // ask if turn off motor if program closes,since accidental close
+    if ( ctx && vfd->motor_running() != VFD::DRIVE_STOPPED ) {
+        if ( AfxMessageBox ( _T ( "Spindle is running, turn it off? " ), MB_YESNO ) == IDYES ) {
+            vfd->turn_off_motor();
+        }
+    }
+
+    CDialogEx::OnOK();
+}
+
+
+BOOL Cfs_gs3Dlg::DestroyWindow()
+{
+    WINDOWPLACEMENT wp;
+
+    GetWindowPlacement ( &wp );
+    AfxGetApp()->WriteProfileBinary ( strSection, strWindowPos, ( LPBYTE ) &wp, sizeof ( wp ) );
+
+    return CDialogEx::DestroyWindow();
+}
+
+
+void Cfs_gs3Dlg::OnShowWindow ( BOOL bShow, UINT nStatus )
+{
+    CDialogEx::OnShowWindow ( bShow, nStatus );
+    WINDOWPLACEMENT *lwp;
+    UINT nl;
+
+    if ( AfxGetApp()->GetProfileBinary ( strSection, strWindowPos, ( LPBYTE* ) &lwp, &nl ) ) {
+        if ( lwp->flags == WPF_RESTORETOMAXIMIZED ) {
+            ShowWindow ( SW_MAXIMIZE );
+
+        } else {
+            SetWindowPos ( NULL,
+                           lwp->rcNormalPosition.left,
+                           lwp->rcNormalPosition.top,
+                           lwp->rcNormalPosition.right - lwp->rcNormalPosition.left,
+                           lwp->rcNormalPosition.bottom - lwp->rcNormalPosition.top,
+                           NULL );
+        }
+
+        delete[] lwp;
+    }
+
 }
 
 void Cfs_gs3Dlg::OnPaint()
@@ -509,7 +644,7 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
     }
 
     // switch on debug mode
-    modbus_set_debug ( ctx, 1 );
+    //modbus_set_debug ( ctx, 1);
 
     // copy over to VFD class..todo: fix
     vfd->set_ctx ( ctx );
@@ -545,56 +680,9 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
         }
     }
 
-    modbus_set_debug ( ctx, 0 );
+    AfxMessageBox ( _T ( "Clicking OK will set drive to status of FlashCut spindle\nCheck if spindle is switched to on or off in FlashCut, and correct RPM is selected" ) );
+
+    //modbus_set_debug ( ctx, 0 );
     //kick off timer
     SetTimer ( 1, 10, NULL );
-}
-
-void Cfs_gs3Dlg::OnBnClickedSerconfig()
-{
-    SerialSetup dlg ;
-    dlg.DoModal();
-    CWinApp* pApp = AfxGetApp();
-    ASSERT ( pApp );
-
-    if ( pApp == NULL ) {
-        return;
-    }
-
-    /// update
-    vfd->set_ratio ( _ttof ( pApp->GetProfileString ( strSection, strRatio, _T ( "1.105" ) ) ) );
-
-
-}
-
-
-void Cfs_gs3Dlg::PostNcDestroy()
-{
-    CDialogEx::PostNcDestroy();
-}
-
-
-void Cfs_gs3Dlg::OnCancel()
-{
-    // ask if turn off motor if program closes,since accidental close
-    if ( ctx &&  vfd->motor_running() == 1 ) {
-        if ( AfxMessageBox ( _T ( "Spindle is running, turn it off? " ), MB_YESNO ) == IDYES ) {
-            vfd->turn_off_motor();
-        }
-    }
-
-    CDialogEx::OnCancel();
-}
-
-
-void Cfs_gs3Dlg::OnOK()
-{
-    // ask if turn off motor if program closes,since accidental close
-    if ( ctx && vfd->motor_running() == 1 ) {
-        if ( AfxMessageBox ( _T ( "Spindle is running, turn it off? " ), MB_YESNO ) == IDYES ) {
-            vfd->turn_off_motor();
-        }
-    }
-
-    CDialogEx::OnOK();
 }

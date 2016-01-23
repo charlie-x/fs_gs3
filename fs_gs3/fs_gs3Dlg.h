@@ -77,19 +77,16 @@ class VFD
 
     public:
 
-        VFD() : ratio ( 1.105 ), status2_read ( false ), ctx ( NULL )
-        {
+        VFD() : ratio ( 1.105 ), status2_read ( false ), ctx ( NULL ) {
 
         }
 
-        void  set_ctx ( modbus_t *pctx )
-        {
+        void  set_ctx ( modbus_t *pctx ) {
             ctx = pctx;
         }
 
         // display shows motor rpm, but we have to send VFD RPM
-        void set_ratio ( double new_ratio )
-        {
+        void set_ratio ( double new_ratio ) {
             ratio = new_ratio;
         }
 
@@ -137,8 +134,7 @@ class VFD
 
         bool status2_read;
 
-        bool control_frequency ( void )
-        {
+        bool control_frequency ( void ) {
 
             if ( status2_read == false ) {
                 if ( read_status_2() == false ) {
@@ -149,8 +145,7 @@ class VFD
             return ( status_monitor_2.freq_src_1 == 1 );
         }
 
-        bool control_motor ( void )
-        {
+        bool control_motor ( void ) {
 
             if ( status2_read == false ) {
                 if ( read_status_2() == false ) {
@@ -163,8 +158,7 @@ class VFD
 
         }
 
-        bool read_status_2 ( void )
-        {
+        bool read_status_2 ( void ) {
 
             ASSERT ( ctx );
 
@@ -184,10 +178,28 @@ class VFD
             return true;
         }
 
-        int motor_running ( void )
-        {
+        // different to motor_running , no checks
+        int drive_state ( void ) {
+            if ( status2_read == true ) {
 
-            if ( read_status_2()  == true ) {
+                return status_monitor_2.drive_state;
+            }
+
+            return -1;
+        }
+
+        int direction ( void ) {
+            if ( status2_read == true ) {
+
+                return status_monitor_2.direction;
+            }
+
+            return -1;
+        }
+
+        int motor_running ( void ) {
+
+            if ( status2_read == true ) {
 
                 // can we control frequency
                 if ( !control_frequency() ) {
@@ -201,19 +213,7 @@ class VFD
                     _RPT0 ( _CRT_WARN, "Can't control drive on/off set P3.0 = 3(suggested) or 4\n" );
                 }
 
-                if ( status_monitor_2.drive_state == DRIVE_STOPPED ) {
-                    // not running
-                    return 0;
-
-                } else
-
-                    if ( status_monitor_2.drive_state == DRIVE_RUNNING ) {
-                        // running
-                        return 1;
-                    }
-
-                // standby or slowing down
-                return 1;
+                return status_monitor_2.drive_state;
             }
 
 
@@ -221,8 +221,7 @@ class VFD
             return -1;
         }
 
-        bool turn_off_motor ( void )
-        {
+        bool turn_off_motor ( void ) {
 
             ASSERT ( ctx );
 
@@ -230,38 +229,40 @@ class VFD
                 return false;
             }
 
-            if ( status_monitor_2.freq_src_3 == 1 ) {
-                if ( modbus_write_register ( ctx, run_stop_addr, 0 ) == -1 ) {
-                    _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
+            if ( status2_read == true ) {
+                if ( status_monitor_2.freq_src_3 == 1 ) {
+                    if ( modbus_write_register ( ctx, run_stop_addr, 0 ) == -1 ) {
+                        _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
 
-                    return false;
+                        return false;
+                    }
                 }
             }
 
             return true;
         }
 
-        bool turn_on_motor ( void )
-        {
+        bool turn_on_motor ( void ) {
             ASSERT ( ctx );
 
             if ( ctx == NULL ) {
                 return false;
             }
 
-            if ( status_monitor_2.freq_src_3 == 1 ) {
-                if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == -1 ) {
+            if ( status2_read == true ) {
+                if ( status_monitor_2.freq_src_3 == 1 ) {
+                    if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == -1 ) {
 
-                    _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
-                    return false;
+                        _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
+                        return false;
+                    }
                 }
             }
 
             return true;
         }
 
-        bool update_rpm ( unsigned int rpm )
-        {
+        bool update_rpm ( unsigned int rpm ) {
             double  converted_rpm;
 
             // convert spindle to motor RPM
@@ -330,8 +331,7 @@ class Cfs_gs3Dlg : public CDialogEx
 // Construction
     public:
         Cfs_gs3Dlg ( CWnd* pParent = NULL );	// standard constructor
-        ~Cfs_gs3Dlg()
-        {
+        ~Cfs_gs3Dlg() {
             if ( ctx ) {
 
                 modbus_close ( ctx );
@@ -350,6 +350,11 @@ class Cfs_gs3Dlg : public CDialogEx
 #ifdef AFX_DESIGN_TIME
         enum { IDD = IDD_FS_GS3_DIALOG };
 #endif
+
+    private:
+        int last_motor_state ;
+        int motor_status;
+        int direction;
 
     protected:
         virtual void DoDataExchange ( CDataExchange* pDX );	// DDX/DDV support
@@ -380,4 +385,8 @@ class Cfs_gs3Dlg : public CDialogEx
         virtual void PostNcDestroy();
         virtual void OnCancel();
         virtual void OnOK();
+        CEdit m_DriveStatus;
+        CEdit m_Direction;
+        virtual BOOL DestroyWindow();
+        afx_msg void OnShowWindow ( BOOL bShow, UINT nStatus );
 };

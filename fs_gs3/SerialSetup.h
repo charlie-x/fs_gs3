@@ -8,6 +8,7 @@ extern const CString strStopBits;
 extern const CString strParity;
 extern const CString strBits;
 extern const CString strRatio;
+extern const CString strWindowPos;
 
 // SerialSetup dialog
 
