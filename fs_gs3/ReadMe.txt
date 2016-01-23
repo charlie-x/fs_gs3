@@ -38,7 +38,5 @@ Instructions
 
 Todo
 	Change the serial COM port to use >9 modern windows style
-    Warn user on exit if spindle is on
-	Add motor to spindle ratio to config screen mines about rpm/1.105/7
     Add display of status parameters
     Graphs n stuff !
