@@ -62,30 +62,42 @@ enum {
 
 class VFD
 {
+    public:
         // commands for GS3 DuraPulse VFD
-        enum {
-            hz_addr			= MODBUS_CMD ( 9, 26 ),
-            run_stop_addr	= MODBUS_CMD ( 9, 27 ),
+        enum modbuscmds  {
+            hz_addr             = MODBUS_CMD ( 9, 26 ),
+            run_stop_addr       = MODBUS_CMD ( 9, 27 ),
+
+            control_freq_addr   = MODBUS_CMD ( 4, 0 ),
+            control_drive_addr  = MODBUS_CMD ( 3, 0 ),
 
             // status monitors
-            status_monitor_2_addr = 48450
+            // wrong
+            // NN CC DD DD VV VV CR C
+            // 01 03 bd 42 00 02 40 73
 
-        } modbuscmds;
+            // right
+            // NN CC DD DD VV VV CR C
+            // 01 03 21 00 00 01 8e 36
+            // 01 03 21 01 00 10 1f fa
+            // 01 03 09 29 00 02 16 5f
+
+            status_monitor_2_addr = MODBUS_CMD ( 0x21, 01 ) //(BD42)
+
+        } ;
 
     public:
 
-        VFD() : ratio ( 1.44 )
-        {
+        VFD() : ratio ( 1.105 ), status2_read ( false ), ctx ( NULL )  {
+
         }
 
-        void  set_ctx ( modbus_t *pctx )
-        {
+        void  set_ctx ( modbus_t *pctx ) {
             ctx = pctx;
         }
 
         // display shows motor rpm, but we have to send VFD RPM
-        void set_ratio ( double new_ratio )
-        {
+        void set_ratio ( double new_ratio ) {
             ratio = new_ratio;
         }
 
@@ -122,10 +134,42 @@ class VFD
             uint16_t	reserved_2 : 1;
         } statusMonitor2;
 
+        enum {
+            DRIVE_STOPPED,
+            DRIVE_RUN_TO_STOP,
+            DRIVE_STANDBY,
+            DRIVE_RUNNING
+        };
+
         statusMonitor2 status_monitor_2;
 
-        bool read_status_2 ( void )
-        {
+        bool status2_read;
+
+        bool control_frequency ( void ) {
+
+            if ( status2_read == false ) {
+                if ( read_status_2() == false ) {
+                    return false;
+                }
+            }
+
+            return ( status_monitor_2.freq_src_1 == 1 );
+        }
+
+        bool control_motor ( void ) {
+
+            if ( status2_read == false ) {
+                if ( read_status_2() == false ) {
+                    return false;
+                }
+
+            }
+
+            return ( status_monitor_2.freq_src_3 == 1 );
+
+        }
+
+        bool read_status_2 ( void ) {
 
             ASSERT ( ctx );
 
@@ -139,19 +183,40 @@ class VFD
                 return false;
             }
 
+            // caches some results, cuts down on comms
+            status2_read = true;
+
             return true;
         }
 
-        int motor_running ( void )
-        {
+        int motor_running ( void ) {
 
             if ( read_status_2()  == true ) {
-                if ( status_monitor_2.drive_state == 0 ) {
-                    // not running
-                    return 0;
+
+                // can we control frequency
+                if ( !control_frequency() ) {
+
+                    _RPT0 ( _CRT_WARN, "Can't control frequency set P4.00 = 4\n" );
                 }
 
-                // running
+                // Can we control drive on/off?
+                if ( !control_motor() ) {
+
+                    _RPT0 ( _CRT_WARN, "Can't control drive on/off set P3.0 = 3(suggested) or 4\n" );
+                }
+
+                if ( status_monitor_2.drive_state == DRIVE_STOPPED ) {
+                    // not running
+                    return 0;
+
+                } else
+
+                    if ( status_monitor_2.drive_state == DRIVE_RUNNING ) {
+                        // running
+                        return 1;
+                    }
+
+                // standby or slowing down
                 return 1;
             }
 
@@ -160,42 +225,44 @@ class VFD
             return -1;
         }
 
-        bool turn_off_motor ( void )
-        {
+        bool turn_off_motor ( void ) {
+
             ASSERT ( ctx );
 
             if ( ctx == NULL ) {
                 return false;
             }
 
-            if ( modbus_write_register ( ctx, run_stop_addr, 0 ) == -1 ) {
-                _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
+            if ( status_monitor_2.freq_src_3 == 1 ) {
+                if ( modbus_write_register ( ctx, run_stop_addr, 0 ) == -1 ) {
+                    _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
 
-                return false;
+                    return false;
+                }
             }
 
             return true;
         }
 
-        bool turn_on_motor ( void )
-        {
+        bool turn_on_motor ( void ) {
             ASSERT ( ctx );
 
             if ( ctx == NULL ) {
                 return false;
             }
 
-            if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == -1 ) {
+            if ( status_monitor_2.freq_src_3 == 1 ) {
+                if ( modbus_write_register ( ctx, run_stop_addr, 1 ) == -1 ) {
 
-                _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
-                return false;
+                    _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
+                    return false;
+                }
             }
 
             return true;
         }
 
-        bool update_rpm ( unsigned int rpm )
-        {
+        bool update_rpm ( unsigned int rpm ) {
             double  converted_rpm;
 
             // convert spindle to motor RPM
@@ -204,10 +271,10 @@ class VFD
             // convert rpm to hZ
 
             // for now testing
-            converted_rpm = 20;
+            //converted_rpm = 20;
 
             // hZ value is in decimal * 10, 60.0hZ is 600 decimal
-            uint16_t hZ = ( uint16_t ) ( converted_rpm * 10.0f );
+            uint16_t hZ = ( uint16_t ) ( converted_rpm / 7 );
 
             // construction of a modbus message
 
@@ -238,9 +305,20 @@ class VFD
                 return false;
             }
 
+            // hardcoded for testing
+            // 208hZ = 1635 motor RPM
+            // 104hZ = 797
+            // 113hZ = 880
+            // 124hZ = 973.3
+            // 127hZ = 997
+            // 128hZ = 998
+            // 129hZ = 1014
+            // 258hZ = 2048
             if ( modbus_write_register ( ctx, hz_addr, hZ ) == -1 ) {
 
-                _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( errno ) );
+                int err;
+                _get_errno ( &err );
+                _RPT1 ( _CRT_WARN, "modbus_write_register failed: %s\n", modbus_strerror ( err ) );
 
                 return false;
             }
@@ -250,10 +328,10 @@ class VFD
 
     private:
 
-        // this is a clone of the one in the dialog, should be in one place.
+// this is a clone of the one in the dialog, should be in one place.
         modbus_t *ctx;
 
-        // conversion from VFD RPM to spindle RPM
+// conversion from VFD RPM to spindle RPM
         double ratio;
 };
 
@@ -263,8 +341,7 @@ class Cfs_gs3Dlg : public CDialogEx
 // Construction
     public:
         Cfs_gs3Dlg ( CWnd* pParent = NULL );	// standard constructor
-        ~Cfs_gs3Dlg()
-        {
+        ~Cfs_gs3Dlg() {
             if ( ctx ) {
 
                 modbus_close ( ctx );

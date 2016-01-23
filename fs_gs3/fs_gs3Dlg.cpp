@@ -55,7 +55,7 @@ END_MESSAGE_MAP()
 // Cfs_gs3Dlg dialog
 
 Cfs_gs3Dlg::Cfs_gs3Dlg ( CWnd* pParent /*=NULL*/ )
-    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),  ctx ( NULL ), m_RPMValue ( 0 ), m_Spindle ( false )
+    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),  ctx ( NULL ), m_RPMValue ( 0 ), m_Spindle ( false ), vfd ( NULL )
 {
     m_hIcon = AfxGetApp()->LoadIcon ( IDR_MAINFRAME );
 
@@ -382,6 +382,8 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
 
     if ( rpm != m_RPMValue ) {
 
+        rpm = m_RPMValue;
+
         if ( vfd->update_rpm ( m_RPMValue ) == false ) {
 
             m_Status.SetWindowText ( _T ( "Unable to setup RPM in VFD" ) );
@@ -391,39 +393,52 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
         }
     }
 
-    // check if motor is running
-    int motor_status;
+    static int last_motor_state = -1;
 
-    // check motor status
-    motor_status = vfd->motor_running();
+    // if keypad stop is pressed, then don't turn the motor back on, regardless of setting?
+    // caching state will do that, but prefer a better way. motor will change state to slowing ,
+    // so if spindle on + motor slowing = keypad stop pressed?
 
-    if ( motor_status == 1 ) {
+    if ( last_motor_state != m_SpindleState.GetCheck() ) {
 
-        // yes is running, is GUI button set to off?
-        if ( m_SpindleState.GetCheck() == FALSE ) {
-            // yes, turn off motor
-            vfd->turn_off_motor();
-        }
+        last_motor_state = m_SpindleState.GetCheck();
 
-        // otherwise leave it alone, already running.
+        // check if motor is running
+        int motor_status;
 
-    } else
-        if ( motor_status == 0 ) {
+        // check motor status, 0 OFF, 1 ON, -1 ERROR
+        motor_status = vfd->motor_running();
 
-            // motor is not running, then check if spindle control is on, if it is switch on the motor
-            if ( m_SpindleState.GetCheck() == TRUE ) {
-                // turn on motor
-                vfd->turn_on_motor();
+        if ( motor_status == 1 ) {
+
+            // yes is running, is GUI button set to off?
+            if ( m_SpindleState.GetCheck() == FALSE ) {
+
+                // yes, turn off motor, can't turn off motor if option not selected
+                vfd->turn_off_motor();
             }
 
-            // otherwise leave it alone, already stopped
+            // otherwise leave it alone, already running.
 
-        } else {
-            m_Status.SetWindowText ( _T ( "Error in reading VFD state" ) );
+        } else
+            if ( motor_status == 0 ) {
 
-            // somethings wrong
-            return;
-        }
+                // motor is not running, then check if spindle control is on, if it is switch on the motor
+                if ( m_SpindleState.GetCheck() == TRUE ) {
+                    // turn on motor
+                    vfd->turn_on_motor();
+                }
+
+                // otherwise leave it alone, already stopped
+
+            } else
+                if ( motor_status == -1 ) {
+                    m_Status.SetWindowText ( _T ( "Error in reading VFD state" ) );
+
+                    // somethings wrong
+                    return;
+                }
+    }
 }
 
 void Cfs_gs3Dlg::OnPaint()
@@ -490,7 +505,7 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
     uint32_t  baud = pApp->GetProfileInt ( strSection, strBAUDRate , 115200 );
     uint8_t bits = pApp->GetProfileInt ( strSection, strBits, 8 );
     double stopbits = pApp->GetProfileInt ( strSection, strStopBits, 1 ) / 10.0;
-    uint8_t parity = pApp->GetProfileInt ( strSection, strStopBits, 'N' );
+    uint8_t parity = pApp->GetProfileInt ( strSection, strParity, 'N' );
 
     ctx = modbus_new_rtu ( CT2A ( ( LPCTSTR ) comPort ), baud, parity, bits, ( int ) stopbits );
 
@@ -508,6 +523,9 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
         return ;
     }
 
+    // switch on debug mode
+    modbus_set_debug ( ctx, 1 );
+
     //copy over to VFD class..todo: fix
     vfd->set_ctx ( ctx );
 
@@ -523,6 +541,26 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
     // all good so far
     m_Status.SetWindowText ( _T ( "Port opened" ) );
 
+    if ( !vfd->control_frequency() ) {
+        if ( AfxMessageBox ( _T ( "Can't control frequency set P4.0 to 5\nShall i do it, or use keypad?" ), MB_YESNO ) == IDYES ) {
+
+            if ( modbus_write_register ( ctx, VFD::control_freq_addr, 5 ) == -1 ) {
+
+                AfxMessageBox ( _T ( "Failed to change P4.0 to 5, use keypad" ) );
+            }
+        }
+    }
+
+    if ( !vfd->control_motor() ) {
+        if ( AfxMessageBox ( _T ( "Can't control motor set P3.0 to 3(suggested) or 4\nShall i do it, or use keypad?" ), MB_YESNO ) == IDYES ) {
+            if ( modbus_write_register ( ctx, VFD::control_drive_addr, 3 ) == -1 ) {
+
+                AfxMessageBox ( _T ( "Failed to change P3.0 to 3(Suggested) or 4, use keypad" ) );
+            }
+        }
+    }
+
+    modbus_set_debug ( ctx, 0 );
     //kick off timer
     SetTimer ( 1, 10, NULL );
 }
