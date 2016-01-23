@@ -55,14 +55,9 @@ END_MESSAGE_MAP()
 // Cfs_gs3Dlg dialog
 
 Cfs_gs3Dlg::Cfs_gs3Dlg ( CWnd* pParent /*=NULL*/ )
-    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),  ctx ( NULL )
+    : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),  ctx ( NULL ), m_RPMValue ( 0 ), m_Spindle ( false )
 {
     m_hIcon = AfxGetApp()->LoadIcon ( IDR_MAINFRAME );
-    // choosen RPM
-    m_RPMValue = 0;
-
-    //status of spindle in flashcut
-    m_Spindle = false;
 
 }
 
@@ -288,7 +283,6 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
     if ( hwnd == NULL ) {
         m_Status.SetWindowText ( _T ( "Couldn't find flashcut" ) );
         return;
-
     }
 
     // Spindle On/Off,
@@ -304,7 +298,6 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
         } else {
             // spindle is On
             m_Spindle = true;
-
         }
 
     } else {

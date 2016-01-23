@@ -1,5 +1,3 @@
-Work in progress.
-
 Modbus part not tested yet. 
 
 Needs libmodbus modbus.dll, my untested windows x64 version is here.
@@ -24,3 +22,6 @@ Instructions
 
 	Choose the COM port and connect, the VFD should be preconfigured for RTU mode, default is ASCII mode
 
+Todo
+	Change the serial COM port to use >9 modern windows style
+	Test it, so far written without VFD/motor/testing
