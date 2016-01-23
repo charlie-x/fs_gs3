@@ -1,6 +1,6 @@
 All tested and working, x64 release and debug, x86 not tested but it should be fine
 
-Needs libmodbus modbus.dll, my untested windows x64 version is here.
+Needs libmodbus modbus.dll, my now tested windows x64 version is here, it has been windowified though.
 	https://github.com/charlie-x/libmodbus
 
 FlashCut 4.5.24
@@ -20,7 +20,9 @@ Instructions
 	Keep the default name as "Spindle RPM" and then add RPM values you want to use in the flashcut config page just 
 	as if you were configuring a direct connection
 
-	Choose the COM port and connect, the VFD should be preconfigured for RTU mode, default is ASCII mode which libmodbus doesn't support
+	Choose the COM port the RS485U shows up as and connect, the VFD should be preconfigured for RTU mode, 
+    default is ASCII mode which libmodbus doesn't support
+    
     P9.02 to 3 (MODBUS RTU 8,N,2)
     
     Software should be configured to
@@ -32,8 +34,11 @@ Instructions
     Change P3.0 to 3 (allows modbus to control run/stop and keypad stop button to function), 4 does same without keypad stop control
     Change P4.0 to 5 (allows modbus to change frequency)
 
+    Run and it set the RPM, use Spindle(On)/Spindle(Off) to switch it on and off, quitting this program won't turn off the spindle (yet)
+
 Todo
 	Change the serial COM port to use >9 modern windows style
-	Add ratio to config screen
+    Warn user on exit if spindle is on
+	Add motor to spindle ratio to config screen mines about rpm/1.101/7
     Add display of status parameters
     Graphs n stuff !
