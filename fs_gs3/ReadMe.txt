@@ -40,3 +40,5 @@ Todo
 	Change the serial COM port to use >9 modern windows style
     Add display of status parameters
     Graphs n stuff !
+    RPM entry box in flashcut will update per char, so if you're at 1000, and type 1, to get to say 1200, 
+        it'll pick up RPM as 1, then 12, then 120, etc, so change that behaviour (listen for killfocus message on that control or read slider)
