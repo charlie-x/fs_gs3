@@ -490,7 +490,7 @@ void Cfs_gs3Dlg::OnBnClickedSerconfig()
     dlg.DoModal();
 
     // update ratio
-    vfd->set_ratio ( _ttof ( pApp->GetProfileString ( strSection, strRatio, _T ( "1.105" ) ) ) );
+    vfd->set_ratio ( _ttof ( pApp->GetProfileString ( strSection, strRatio, _T ( "8.03" ) ) ) );
 
 }
 
@@ -626,6 +626,9 @@ void Cfs_gs3Dlg::OnBnClickedConnect()
     uint8_t bits = pApp->GetProfileInt ( strSection, strBits, 8 );
     double stopbits = pApp->GetProfileInt ( strSection, strStopBits, 1 ) / 10.0;
     uint8_t parity = pApp->GetProfileInt ( strSection, strParity, 'N' );
+
+    // update ratio
+    vfd->set_ratio ( _ttof ( pApp->GetProfileString ( strSection, strRatio, _T ( "8.03" ) ) ) );
 
     ctx = modbus_new_rtu ( CT2A ( ( LPCTSTR ) comPort ), baud, parity, bits, ( int ) stopbits );
 

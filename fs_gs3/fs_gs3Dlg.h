@@ -77,7 +77,7 @@ class VFD
 
     public:
 
-        VFD() : ratio ( 1.105 ), status2_read ( false ), ctx ( NULL ) {
+        VFD() : ratio ( 8.03 ), status2_read ( false ), ctx ( NULL ) {
 
         }
 
@@ -263,6 +263,7 @@ class VFD
         }
 
         bool update_rpm ( unsigned int rpm ) {
+
             double  converted_rpm;
 
             // convert spindle to motor RPM
@@ -270,11 +271,13 @@ class VFD
             if ( ratio ) {
                 converted_rpm = ( double ) rpm / ratio;
 
-            } else { converted_rpm = rpm; }
+            } else {
+                converted_rpm = rpm;
+            }
 
             // convert rpm to hZ
             // hZ value
-            uint16_t hZ = ( uint16_t ) ( converted_rpm / 7 );
+            uint16_t hZ = ( uint16_t ) ( converted_rpm );
 
             // construction of a modbus message
 
