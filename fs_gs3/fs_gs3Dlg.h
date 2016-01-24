@@ -378,6 +378,7 @@ class Cfs_gs3Dlg : public CDialogEx
         VFD *vfd;
         CEdit m_RPM;
         int m_RPMValue;
+        LRESULT last_rpm_slider_pos;
         bool m_Spindle;
         CButton m_SpindleState;
         // status of connection

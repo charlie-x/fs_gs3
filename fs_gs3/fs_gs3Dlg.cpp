@@ -61,6 +61,7 @@ Cfs_gs3Dlg::Cfs_gs3Dlg ( CWnd* pParent /*=NULL*/ )
     : CDialogEx ( IDD_FS_GS3_DIALOG, pParent ),
       ctx ( NULL ), m_RPMValue ( 0 ), m_Spindle ( false ),
       vfd ( NULL ), last_motor_state ( -1 ), motor_status ( -1 ),
+      last_rpm_slider_pos ( -1 ),
       direction ( -1 )
 {
     m_hIcon = AfxGetApp()->LoadIcon ( IDR_MAINFRAME );
@@ -130,6 +131,7 @@ BOOL Cfs_gs3Dlg::OnInitDialog()
     last_motor_state = -1;
     motor_status = -1;
     direction = -1;
+    last_rpm_slider_pos = -1;
 
     vfd = new VFD;
     ASSERT ( vfd );
@@ -141,6 +143,10 @@ BOOL Cfs_gs3Dlg::OnInitDialog()
 
     // not connected
     m_Status.SetWindowText ( _T ( "Motor not connected" ) );
+
+
+    // debug
+    //SetTimer ( 1, 10, NULL );
 
     return TRUE;  // return TRUE  unless you set the focus to a control
 }
@@ -280,7 +286,7 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
         m_Spindle = false;
     }
 
-    // in case  layout of gui is different, search for "Spindle RPM" in a Static
+    // in case  layout of GUI is different, search for "Spindle RPM" in a Static
 
     // Spindle RPM, next is the trackbar, next is the ComoboBox
     HWND static_spindle_text = ::FindWindowEx ( hwnd, NULL, _T ( "Static" ), _T ( "Spindle RPM" ) );
@@ -291,19 +297,29 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
     }
 
     // iterate to right control
-    spindle_speed = ::GetWindow ( static_spindle_text, GW_HWNDNEXT );
-    ASSERT ( spindle_speed );
+    HWND spindle_speed_msctls_trackbar32 = ::GetWindow ( static_spindle_text, GW_HWNDNEXT );
+    ASSERT ( spindle_speed_msctls_trackbar32 );
 
-    if ( spindle_speed == NULL ) {
-        m_Status.SetWindowText ( _T ( "Can't find control" ) );
+    if ( spindle_speed_msctls_trackbar32 == NULL ) {
+        m_Status.SetWindowText ( _T ( "Can't find RPM trackbar" ) );
         return;
     }
 
-    spindle_speed = ::GetWindow ( spindle_speed, GW_HWNDNEXT );
+    SetLastError ( ERROR_SUCCESS );
+    // Slider POS is the index of the slider, which is just something like 0-100, it doesn't map to an RPM
+    // if RPM is different and slider pos is the same, RPM hasn't updated, kill focus hasn't been received.
+    LRESULT current_rpm_slider_pos = ::SendMessage ( spindle_speed_msctls_trackbar32, TBM_GETPOS, 0, 0 );
+
+    if ( GetLastError() != ERROR_SUCCESS ) {
+        m_Status.SetWindowText ( _T ( "Couldn't get slider position" ) );
+        return;
+    }
+
+    spindle_speed = ::GetWindow ( spindle_speed_msctls_trackbar32, GW_HWNDNEXT );
     ASSERT ( spindle_speed );
 
     if ( spindle_speed == NULL ) {
-        m_Status.SetWindowText ( _T ( "Can't find control 2" ) );
+        m_Status.SetWindowText ( _T ( "Can't find RPM edit box" ) );
         return;
     }
 
@@ -318,16 +334,17 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
         return;
     }
 
+    // SendMessage doesn't set a success value
+    SetLastError ( ERROR_SUCCESS );
     // fetch RPM  value
     lResult = ::SendMessage ( spindle_speed, WM_GETTEXT, sizeof ( szBuf ) / sizeof ( szBuf[0] ), ( LPARAM ) szBuf );
 
-    if ( lResult ) {
+    // lResult doesn't tell us about a failure since its dependant on the message type, WM_GETTEXT = length?
+    if ( GetLastError() == ERROR_SUCCESS ) {
 
         // convert to int
         m_RPMValue = _ttoi ( szBuf );
 
-        // copy into dialog
-        m_RPM.SetWindowText ( szBuf );
 
     } else {
         m_RPM.SetWindowText ( _T ( "-3" ) );
@@ -355,16 +372,33 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
     // send new RPM to GSx, comms are slow to VFD so only update when you need too
     static int rpm = -1;
 
+    // first check if RPM is different.
     if ( rpm != m_RPMValue ) {
 
-        rpm = m_RPMValue;
+        // it'd probably be ok to update last rpm here, but there might be an edge case where rpm doesn't change and slider does.
 
-        if ( vfd->update_rpm ( m_RPMValue ) == false ) {
+        // second check if RPM slider position is different as well.
 
-            m_Status.SetWindowText ( _T ( "Unable to update RPM in VFD" ) );
+        if ( current_rpm_slider_pos != last_rpm_slider_pos ) {
 
-            // wasn't able to pass to VFD, drop out early
-            return;
+            // update rpm and slider pos last state.
+            last_rpm_slider_pos = current_rpm_slider_pos;
+            rpm = m_RPMValue;
+
+            if ( vfd->update_rpm ( m_RPMValue ) == false ) {
+
+                m_Status.SetWindowText ( _T ( "Unable to update RPM in VFD" ) );
+
+                // wasn't able to pass to VFD, drop out early
+                return;
+
+            } else {
+
+                //changed on VFD, so reflect in window
+                // copy into dialog
+                m_RPM.SetWindowText ( szBuf );
+
+            }
         }
     }
 
@@ -469,6 +503,7 @@ void Cfs_gs3Dlg::OnTimer ( UINT_PTR nIDEvent )
                     // somethings wrong
                     return;
                 }
+
     }
 }
 
